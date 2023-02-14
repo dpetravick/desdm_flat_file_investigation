@@ -10,14 +10,85 @@ Optons available via <command> --help
 """
 import sqlite3 
 import pandas as pd
- 
-oracle_selects = {
-""  : ""
-""  : ""
-""  ;  ""
-}
+import argparse
+import logging
 
-def export(arge):
+prefix_template = """
+set pagesize 0   
+set trimspool on 
+set headsep off  
+set linesize 300   
+set numw  300 
+spool {}.csv
+"""
+
+sqlinfo = {}
+sqlinfo["y6a1_proctag"]={}
+sqlinfo["y6a1_proctag"]["select"] = """
+   SELECT
+      TRIM(tag) || ','  ||  pfw_attempt_id from y6a1_proctag;
+   """
+
+
+sql = """
+     CREATE TABLE IF NOT Exists
+y6a1_proctag
+     Values( 
+     fw_attempt_id  BIGINT,
+     tag             TEXT
+)
+"""
+
+sql == """
+    CREATE TABLE IF NOT Exists 
+    y6a1_image    
+   Values (
+    pfw_attempt_id TEXT,
+    tilename       TEXT,
+    coadd_nwgint   TEXT,
+    expnum         INT,
+    ccdnum 
+   ) 
+"""
+
+sql = """ 
+    CREATE TABLE IF NOT Exists
+      pfw_attempt_id
+      VALUES (
++       tilename      TEXT,
++       coadd_nwgint  TEXT,
++       expnum        INT,
++       ccdnun        INT
+)
+"""
+sql = """
+    CREATE TABLE IF NOT Exists
+-    y6a1_file_archive_info 
+VALUES (
++    filetype  TEXT,   
++    ccdnum    TEXT,
++    tag       TEXT
+      )
+"""
+
+sql = """
+CREATE TABLE IF NOT Exists
+   y6a1_image
+VALUES (
+   pfw_attempt_id  TEXT,
+   tilename        TEXT,
+   coadd_nwgint    TEXT,
+   expnum          INT,
+   ccdnum          INT
+   )
+"""
+def export(arg):
+   table = "y6a1_proctag"
+   prefix = prefix_template.format(table)
+   select = sqlinfo[table]["select"]
+   sql = prefix + select
+   print (sql)
+   
    
 def schema(args):
    conn = sqlite3.connect(args.db)
@@ -34,20 +105,21 @@ if __name__ == "__main__":
     main_parser.add_argument('--loglevel','-l',
                              help='loglevel NONE, "INFO",  DEBUG',
                              default="INFO")
-    parser.add_argument('--db',  default='desdm-test',
+    main_parser.add_argument('--db',  default='desdm-test',
              help='the sqlite DB udder test')
         
-    subparsers = parser.add_subparsers()   
+    subparsers = main_parser.add_subparsers()   
 
     #list but not execute. 
-    parset = subparsers.add_parser('export', help=export.__doc__)
+    parser = subparsers.add_parser('export', help=export.__doc__)
     parser.set_defaults(func=export)
     parser.add_argument("table", help = "a table of interest")
 
- 
+
+    args = main_parser.parse_args()
     loglevel=logging.__dict__[args.loglevel]
     assert type(loglevel) == type(1)
-    loggling.basicConfig(level=logging.__dict__[args.loglevel])
+    logging.basicConfig(level=logging.__dict__[args.loglevel])
 
     if not args.func:  # there are no subfunctions
         main_parser.print_help()
