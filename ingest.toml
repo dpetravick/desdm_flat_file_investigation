@@ -1,0 +1,74 @@
+
+
+##########################
+[y6a1_proctag]
+select = """
+   SELECT
+   TRIM(tag) || ','  ||  pfw_attempt_id from y6a1_proctag;
+   """
+create = """
+
+     CREATE TABLE IF NOT Exists
+         y6a1_proctag
+     VALUES
+         (
+         fw_attempt_id  BIGINT,
+          tag             TEXT
+         ) ;
+     CREATE y6a1_proctag_attempt_indev INDEX on y6a1_proctag (y6a1_proctag);
+     commit; 
+     """    
+
+##########################
+[y6a1_image]
+create = """"
+    CREATE TABLE IF NOT Exists 
+    y6a1_image    
+   Values (
+    pfw_attempt_id TEXT,
+    tilename       TEXT,
+    coadd_nwgint   TEXT,
+    expnum         INT,
+    ccdnum 
+   ) 
+   """
+
+##########################
+[pfw_attempt_id]
+create = """ 
+    CREATE TABLE IF NOT Exists
+      pfw_attempt_id
+    VALUES (
+       tilename      TEXT,
+       coadd_nwgint  TEXT,
+       expnum        INT,
+       ccdnun        INT
+    )
+    """
+
+
+##########################
+[y6a1_file_archive_info]
+create = """
+    CREATE TABLE IF NOT Exists
+      y6a1_file_archive_info 
+    VALUES (
+     filetype  TEXT,   
+     ccdnum    TEXT,
+     tag       TEXT
+     )
+    """
+
+##########################
+[y6a1_image]
+create  = """
+   CREATE TABLE IF NOT Exists
+      y6a1_image
+   VALUES (
+      pfw_attempt_id  TEXT,
+      tilename        TEXT,
+      coadd_nwgint    TEXT,
+      expnum          INT,
+      ccdnum          INT
+   )
+"""

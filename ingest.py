@@ -28,7 +28,17 @@ sqlinfo["y6a1_proctag"]["select"] = """
    SELECT
       TRIM(tag) || ','  ||  pfw_attempt_id from y6a1_proctag;
    """
-
+sqlinfo["y6a1_proctag"]["create"] = """
+     CREATE TABLE IF NOT Exists
+         y6a1_proctag
+     VALUES
+         (
+         fw_attempt_id  BIGINT,
+          tag             TEXT
+         ) ;
+     CREATE y6a1_proctag_attempt_indev INDEX on y6a1_proctag (y6a1_proctag);
+     commit; 
+"""    
 
 sql = """
      CREATE TABLE IF NOT Exists
@@ -83,6 +93,7 @@ VALUES (
    )
 """
 def export(arg):
+   "get a CSV of data from ORACLE"
    table = "y6a1_proctag"
    prefix = prefix_template.format(table)
    select = sqlinfo[table]["select"]
@@ -90,8 +101,12 @@ def export(arg):
    print (sql)
    
    
-def schema(args):
-   conn = sqlite3.connect(args.db)
+def create(args):
+   "make schema for table" 
+   conn = sqlite3 .connect(args.db)
+   table = "y6a1_proctag"
+   conn.execute(sqlinfo[table]["create"]
+
 def ingest(args):
    df = pd.read_csv('filepaths-for-y6a1_image.csv')
    conn = sqlite3.connect(args.db)
