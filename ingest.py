@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 """
 for main progams, write the documentation out in manpage format.
 It will be part of the help, wiht quic help on command line
@@ -9,103 +9,63 @@ so conclude this docstring with
 Optons available via <command> --help
 """
 import sqlite3 
-import pandas as pd
 import argparse
 import logging
+import toml 
+import pprint
 
 prefix_template = """
 set pagesize 0   
+sef colsep ,
 set trimspool on 
 set headsep off  
-set linesize 300   
-set numw  300 
+set linesize 120
+set numw  120
 spool {}.csv
 """
 
-sqlinfo = {}
-sqlinfo["y6a1_proctag"]={}
-sqlinfo["y6a1_proctag"]["select"] = """
-   SELECT
-      TRIM(tag) || ','  ||  pfw_attempt_id from y6a1_proctag;
-   """
-sqlinfo["y6a1_proctag"]["create"] = """
-     CREATE TABLE IF NOT Exists
-         y6a1_proctag
-     VALUES
-         (
-         fw_attempt_id  BIGINT,
-          tag             TEXT
-         ) ;
-     CREATE y6a1_proctag_attempt_indev INDEX on y6a1_proctag (y6a1_proctag);
-     commit; 
-"""    
+def get_config(args):
+   with open("ingest.toml",'r') as f :
+      config = toml.load(f)
+   return config
 
-sql = """
-     CREATE TABLE IF NOT Exists
-y6a1_proctag
-     Values( 
-     fw_attempt_id  BIGINT,
-     tag             TEXT
-)
-"""
+def list(args):
+   "print list of known tables"
+   config = get_config(args)
+   for key in config:
+      pprint.pprint(key)
 
-sql == """
-    CREATE TABLE IF NOT Exists 
-    y6a1_image    
-   Values (
-    pfw_attempt_id TEXT,
-    tilename       TEXT,
-    coadd_nwgint   TEXT,
-    expnum         INT,
-    ccdnum 
-   ) 
-"""
 
-sql = """ 
-    CREATE TABLE IF NOT Exists
-      pfw_attempt_id
-      VALUES (
-+       tilename      TEXT,
-+       coadd_nwgint  TEXT,
-+       expnum        INT,
-+       ccdnun        INT
-)
-"""
-sql = """
-    CREATE TABLE IF NOT Exists
--    y6a1_file_archive_info 
-VALUES (
-+    filetype  TEXT,   
-+    ccdnum    TEXT,
-+    tag       TEXT
-      )
-"""
-
-sql = """
-CREATE TABLE IF NOT Exists
-   y6a1_image
-VALUES (
-   pfw_attempt_id  TEXT,
-   tilename        TEXT,
-   coadd_nwgint    TEXT,
-   expnum          INT,
-   ccdnum          INT
-   )
-"""
 def export(arg):
    "get a CSV of data from ORACLE"
-   table = "y6a1_proctag"
+   table = args.table
+   config = get_config(args)[table]
+   columns  = [c[0] for c in config["columns"]]
+   columns = " || ',' || ".join(columns)
    prefix = prefix_template.format(table)
-   select = sqlinfo[table]["select"]
+   select = config["select"].format(columns)
    sql = prefix + select
    print (sql)
    
    
 def create(args):
    "make schema for table" 
+   config = get_config(args)
    conn = sqlite3 .connect(args.db)
-   table = "y6a1_proctag"
-   conn.execute(sqlinfo[table]["create"]
+   table = args.table
+   config = get_config(args)[table]
+   columns =  config["columns"]
+   values = ["{} {}".format(c[0], c[1]) for c in columns]
+   values = ",".join(values)
+   values = "({})".format(values)
+   sql = config["create"].format(values)
+   print (sql)
+   conn.execute(sql)
+   for column  in config["indexes"]:
+      sql = "create index {}__{}_idx on {} ({}) ;".format(
+         table, column, table, column)
+      print (sql)
+      conn.execute(sql)
 
 def ingest(args):
    df = pd.read_csv('filepaths-for-y6a1_image.csv')
@@ -125,11 +85,20 @@ if __name__ == "__main__":
         
     subparsers = main_parser.add_subparsers()   
 
-    #list but not execute. 
+    # export from Oracle
     parser = subparsers.add_parser('export', help=export.__doc__)
     parser.set_defaults(func=export)
     parser.add_argument("table", help = "a table of interest")
 
+    # create tables in sqlite2
+    parser = subparsers.add_parser('create', help=create.__doc__)
+    parser.set_defaults(func=create)
+    parser.add_argument("table", help = "a table of interest")
+
+
+    # list known tables 
+    parser = subparsers.add_parser('list', help=list.__doc__)
+    parser.set_defaults(func=list)
 
     args = main_parser.parse_args()
     loglevel=logging.__dict__[args.loglevel]
