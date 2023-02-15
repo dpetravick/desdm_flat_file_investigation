@@ -1,17 +1,25 @@
+[y6a1_file_archive_info]
 
+columns = [
+  ["filetype", "TEXT"],
+  ["filename", "TEXT"],
+  ["path",     "TEXT"]
+  ]
+indexes = ["ccdnum", "filetype", "tag"]
 
+select = "SELECT {} from y6a1_file_archive_info ; "
+create = "CREATE TABLE IF NOT Exists y6a1_file_archive_info {} ;" 
 ##########################
-
 [y6a1_proctag]
 
 columns = [
    ["pfw_attempt_id", "INTEGER"],
    ["tag",            "TEXT"]  
    ]
-indexes = ["tag", "pwf_attempt_id"]
+indexes = ["tag", "pfw_attempt_id"]
 
 select = "SELECT {}  from y6a1_proctag;"
-create = "CREATE TABLE IF NOT Exists  y6a1_proctag {} ;  commit;"
+create = "CREATE TABLE IF NOT Exists  y6a1_proctag {} ; "
 
 ##########################
 [y6a1_image]
@@ -27,7 +35,7 @@ columns = [
 indexes = ["pfw_attempt_id", "filetype", "filename", "tilename"]
 
 select = "SELECT  {} FROM y6a1_image ;"
-create = "CREATE TABLE IF NOT EXISTS y6a1_image {} ; commit;"
+create = "CREATE TABLE IF NOT EXISTS y6a1_image {} ;"
 
 ##########################
 [pfw_attempt_id]
@@ -44,15 +52,21 @@ select = "SELECT {} FROM pfw_attempt_id ;"
 create = "CREATE {} IF NOT EXISTS pfw_attempt_id {}; commit;"
 
 ##########################
-[y6a1_file_archive_info]
+#
+# use cases
+# 
+#########################
 
-columns = [
-  ["filetype", "TEXT"],
-  ["ccdnum",   "INTEGER"],
-  ["tag",      "TEXT"]
-  ]
-indexes = ["ccdnum", "filetype", "tag"]
-
-select = "SELECT {} from y6a1_file_archive_info ; "
-create = "CREATE TABLE IF NOT Exists y6a1_file_archive_info {} ; commit ;" 
-
+[uc-se-into-coadd]
+doc="How to find the single epoch images that went into a tile"
+query= """
+select fai.path,fai.filename
+from y6a1_proctag t, y6a1_image i, y6a1_image j, y6a1_file_archive_info fai
+where t.tag='Y6A1_COADD'
+    and t.pfw_attempt_id=i.pfw_attempt_id
+    and i.tilename='DES0000+0209'
+    and i.filetype='coadd_nwgint'
+    and i.expnum=j.expnum and i.ccdnum=j.ccdnum
+    and j.filetype='red_immask'
+    and j.filename=fai.filename;
+"""
