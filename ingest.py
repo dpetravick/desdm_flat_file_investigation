@@ -92,7 +92,6 @@ def ingest(args):
    logging.info(f"about to read {args.csv}")
    df = pd.read_csv(args.csv)
    print (df)
-   import pdb; pdb.set_trace()
    table = clean_tablename(args.csv)
    logging.info(f"about to ingest into table {table}")
    conn = sqlite3.connect(args.db)
@@ -102,14 +101,15 @@ def index(args):
    "indexe the DB"
    table = clean_tablename(args.table)
    config = get_config(args)[table]
-   columns =  config["columns"]
+   import pdb; pdb.set_trace()
    conn = sqlite3.connect(args.db)
-   for column  in config["indexes"]:
-      sql = "create index {}__{}_idx on {} ({}) ;".format(
-         table, column, table, column)
+   for indexed_columns  in config["indexes"]:
+      indexname = [col.strip() for col in indexed_columns .split(",")]
+      indexname = "_".join(indexname)
+      indexname = f"{table}__{indexname}_idx"
+      sql = f"CREATE INDEX IF NOT EXISTS {indexname} ON {table} ({indexed_columns}) ;"
       print (sql)
       conn.execute(sql)
-
 
 def query(args):
    "perform an example query specified in the toml file"
@@ -123,7 +123,7 @@ def query(args):
    result = cur.execute(query)
    for r in result: print(r)
 
-def explain(args):
+def plan(args):
    "perform an explain of a query"
    config = get_config(args)[args.query]
    doc = config["doc"]
@@ -134,6 +134,27 @@ def explain(args):
    cur = conn.cursor()
    result = cur.execute(query)
    for r in result: print(r)
+
+def shell(args):
+   "start  an sqlilte shell against DB"
+   cmd = f"rlwrap sqlite3 {args.db}"
+   import sys
+   import subprocess
+   help = """                                                                      
+.excel                   Display the output of next command in spreadsheet      
+.headers on|off          Turn display of headers on or off                      
+.indexes ?TABLE?         Show names of indexes                                  
+.log FILE|off            Turn logging on or off.  FILE can be stderr/stdout     
+.output ?FILE?           Send output to FILE or stdout if FILE is omitted       
+.progress N              Invoke progress handler after every N opcodes          
+.schema ?PATTERN?        Show the CREATE statements matching PATTERN            
+.shell CMD ARGS...       Run CMD ARGS... in a system shell                      
+.tables ?TABLE?          List names of tables matching LIKE pattern TABLE       
+** Do not terminate any with  a ;                                                    
+"""
+   print(help)
+   subprocess.run(cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr, shell=True)
+   
 
 if __name__ == "__main__":
 
@@ -182,10 +203,14 @@ if __name__ == "__main__":
     parser.set_defaults(func=query)
     parser.add_argument("query", help = "query to try") 
 
-    # explaing  named  canned demo query from toml file
-    parser = subparsers.add_parser('explain', help=explain.__doc__)
-    parser.set_defaults(func=explain)
+    #  show plan for   named  canned demo query from toml file
+    parser = subparsers.add_parser('plan', help=plan.__doc__)
+    parser.set_defaults(func=plan)
     parser.add_argument("query", help = "query to explain") 
+
+    #  show plan for   named  canned demo query from toml file
+    parser = subparsers.add_parser('shell', help=shell.__doc__)
+    parser.set_defaults(func=shell)
 
     args = main_parser.parse_args()
     loglevel=logging.__dict__[args.loglevel]

@@ -5,7 +5,7 @@ columns = [
   ["filename", "TEXT"],
   ["path",     "TEXT"]
   ]
-indexes = ["ccdnum", "filetype", "tag"]
+indexes = ["filename", "filetype", "tag"]
 
 select = "SELECT {} from y6a1_file_archive_info ; "
 create = "CREATE TABLE IF NOT Exists y6a1_file_archive_info {} ;" 
@@ -20,7 +20,6 @@ indexes = ["tag", "pfw_attempt_id"]
 
 select = "SELECT {}  from y6a1_proctag;"
 create = "CREATE TABLE IF NOT Exists  y6a1_proctag {} ; "
-
 ##########################
 [y6a1_image]
 
@@ -32,7 +31,8 @@ columns = [
            ["ccdnum",         "INTEGER"],
            ["tilename",       "TEXT"]
           ]
-indexes = ["pfw_attempt_id", "filetype", "filename", "tilename"]
+#indexes = ["pfw_attempt_id", "filetype", "filename", "tilename", "expnum", "ccdnum"]
+indexes = ["pfw_attempt_id",  "filename, filetype", "tilename", "expnum, ccdnum"]
 
 select = "SELECT  {} FROM y6a1_image ;"
 create = "CREATE TABLE IF NOT EXISTS y6a1_image {} ;"
@@ -46,7 +46,7 @@ columns = [
    ["expnum",       "INTEGER"],
    ["ccdnum",       "INTEGER"]
    ]
-indexes = ["tilename", "expnum", "ccdnum"]
+indexes = ["tilename", "expnum", "ccdnum", "coadd_nwgint"]
 
 select = "SELECT {} FROM pfw_attempt_id ;"
 create = "CREATE {} IF NOT EXISTS pfw_attempt_id {}; commit;"
