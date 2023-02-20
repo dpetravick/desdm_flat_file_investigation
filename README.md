@@ -90,7 +90,7 @@ CREATE INDEX IF NOT EXISTS y6a1_image__tilename_idx ON y6a1_image (tilename) ;
 CREATE INDEX IF NOT EXISTS y6a1_image__expnum_ccdnum_idx ON y6a1_image (expnum, ccdnum) ;
 ```
 
-Wihtout deletind the old fielname, filetype indices, speed increased. ~680 (all) commponent 
+Without deleteing the old fielname, filetype indices, speed increased. ~680 (all) commponent 
 CCD were returned in unuder 1 minute 18 seconds 
 
 ``` 
@@ -122,4 +122,93 @@ where t.tag='Y6A1_COADD'
 
 ``
  
+# Reload DB from scratch experiment with PRAGMA analysis_limit=400 PRAGMA optimize; 
 
+- about 8 minutes to load data from CSV's 
+- about 4 12/ mim to make indexes
+- No vacuumming
+
+```
+(base) [donaldp@deslogin desdm_flat_file_investigation]$ ./ingest.py plan uc-se-into-coadd
+EXPLAIN QUERY PLAN select fai.path,fai.filename
+from y6a1_proctag t, y6a1_image i, y6a1_image j, y6a1_file_archive_info fai
+where t.tag='Y6A1_COADD'
+    and t.pfw_attempt_id=i.pfw_attempt_id
+    and i.tilename='DES0000+0209'
+    and i.filetype='coadd_nwgint'
+    and i.expnum=j.expnum and i.ccdnum=j.ccdnum
+    and j.filetype='red_immask'
+    and j.filename=fai.filename;
+
+(9, 0, 0, 'SEARCH TABLE y6a1_image AS i USING INDEX y6a1_image__tilename_idx (tilename=?)')
+(16, 0, 0, 'SEARCH TABLE y6a1_proctag AS t USING INDEX y6a1_proctag__pfw_attempt_id_idx (pfw_attempt_id=?)')
+(25, 0, 0, 'SEARCH TABLE y6a1_image AS j USING INDEX y6a1_image__expnum_ccdnum_idx (expnum=? AND ccdnum=?)')
+(36, 0, 0, 'SEARCH TABLE y6a1_file_archive_info AS fai USING INDEX y6a1_file_archive_info__filename_idx (filename=?)')
+```
+
+- One minute six secondds
+- Still no use of filename, filetype index from Image.
+
+ experiment with PRAGMA analysis_limit=400 PRAGMA optimize;
+- logged in to database shell 
+- ran uc-se-into-coadd 
+- PRAGMA analysis_limit=100 ; PRAGMA optimize;
+- repeated query -- no real change about 1 minute 13 sec.
+ 
+
+# TRY alternate index (tablename,
+ filename and filetype)
+- though maybe tablename alreadys  narrows down the filename and filetypes sufficently
+- CREATE INDEX IF NOT EXISTS y6a1_image__pfw_attempt_id_idx ON y6a1_image (pfw_attempt_id) ;
+- CREATE INDEX IF NOT EXISTS y6a1_image__tilename_filename_filetype_idx ON y6a1_image (tilename, filename, filetype) ;
+- CREATE INDEX IF NOT EXISTS y6a1_image__expnum_ccdnum_idx ON y6a1_image (expnum, ccdnum) ;
+- yes, -- 54 seconds. 
+
+```
+EXPLAIN QUERY PLAN select fai.path,fai.filename
+from y6a1_proctag t, y6a1_image i, y6a1_image j, y6a1_file_archive_info fai
+where t.tag='Y6A1_COADD'
+    and t.pfw_attempt_id=i.pfw_attempt_id
+    and i.tilename='DES0000+0209'
+    and i.filetype='coadd_nwgint'
+    and i.expnum=j.expnum and i.ccdnum=j.ccdnum
+    and j.filetype='red_immask'
+    and j.filename=fai.filename;
+
+(9, 0, 0, 'SEARCH TABLE y6a1_image AS i USING INDEX y6a1_image__tilename_filename_filetype_idx (tilename=?)')
+(16, 0, 0, 'SEARCH TABLE y6a1_proctag AS t USING INDEX y6a1_proctag__pfw_attempt_id_idx (pfw_attempt_id=?)')
+(25, 0, 0, 'SEARCH TABLE y6a1_image AS j USING INDEX y6a1_image__expnum_ccdnum_idx (expnum=? AND ccdnum=?)')
+(36, 0, 0, 'SEARCH TABLE y6a1_file_archive_info AS fai USING INDEX y6a1_file_archive_info__filename_idx (filename=?)')
+```
+
+Experiment with PRAGMA analysis_limit=400 PRAGMA optimize;
+- logged in to database shell
+- ran uc-se-into-coadd
+- PRAGMA analysis_limit=100 ; PRAGMA optimize;
+- got 52 seconds (no appreciable  increase)
+
+
+# TRY alternate indes 
+  - (tablename, filename and filetype, expum ccdid)
+  - Much worse.
+  - revert that and make a filename, filetype multi-column index on file-archiveONg 
+  - got to 23 seconde in teh psqlshee.
+
+```
+EXPLAIN QUERY PLAN select fai.path,fai.filename
+from y6a1_proctag t, y6a1_image i, y6a1_image j, y6a1_file_archive_info fai
+where t.tag='Y6A1_COADD'
+    and t.pfw_attempt_id=i.pfw_attempt_id
+    and i.tilename='DES0000+0209'
+    and i.filetype='coadd_nwgint'
+    and i.expnum=j.expnum and i.ccdnum=j.ccdnum
+    and j.filetype='red_immask'
+    and j.filename=fai.filename;
+
+(9, 0, 0, 'SEARCH TABLE y6a1_image AS i USING INDEX y6a1_image__tilename_filename_filetype_idx (tilename=?)')
+(16, 0, 0, 'SEARCH TABLE y6a1_proctag AS t USING INDEX y6a1_proctag__pfw_attempt_id_idx (pfw_attempt_id=?)')
+(25, 0, 0, 'SEARCH TABLE y6a1_image AS j USING INDEX y6a1_image__expnum_ccdnum_idx (expnum=? AND ccdnum=?)')
+(36, 0, 0, 'SEARCH TABLE y6a1_file_archive_info AS fai USING INDEX y6a1_file_archive_info__filename_filetype_idx (filename=?)')
+```
+
+# 

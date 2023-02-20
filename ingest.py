@@ -101,7 +101,6 @@ def index(args):
    "indexe the DB"
    table = clean_tablename(args.table)
    config = get_config(args)[table]
-   import pdb; pdb.set_trace()
    conn = sqlite3.connect(args.db)
    for indexed_columns  in config["indexes"]:
       indexname = [col.strip() for col in indexed_columns .split(",")]
