@@ -18,11 +18,12 @@ import os
 
 prefix_template = """
 set pagesize 0   
-sef colsep ,
+set colsep ,
 set trimspool on 
 set headsep off  
 set linesize 120
 set numw  120
+set echo off
 spool {}.csv
 """
 
@@ -55,11 +56,25 @@ def export(arg):
    "get a CSV of data from ORACLE"
    table = clean_tablename(args.table)
    config = get_config(args)[table]
+
+   #make a sql query to output the first line header of the CSV.
    columns  = [c[0] for c in config["columns"]]
-   columns = " || ',' || ".join(columns)
+   header_text = f"'{','.join(columns)}'"
+   header_sql = f"select {header_text} from DUAL; \n"
+
+   # Make the select for the ebody of the CSV.
+   #  Trim all strings.
+   body_items = []
+   for column, type in config["columns"]:
+      if "TEXT" in type: column = f"TRIM({column})"
+      body_items.append(column)
+   body_items = "||','||".join(body_items)
+   body_sql = config["select"].format(body_items)
+
+   #make the stuff we need to spool the answer
    prefix = prefix_template.format(table)
-   select = config["select"].format(columns)
-   sql = prefix + select
+
+   sql = prefix + header_sql + body_sql
    print (sql)
    
    
@@ -69,7 +84,6 @@ def create(args):
    conn = sqlite3 .connect(args.db)
    table = clean_tablename(args.table)
    config = get_config(args)[table]
-   columns =  config["columns"]
    values = ["{} {}".format(c[0], c[1]) for c in columns]
    values = ",".join(values)
    values = "({})".format(values)
