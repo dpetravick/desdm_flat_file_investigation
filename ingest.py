@@ -28,8 +28,8 @@ set numw  120
 set echo off
 set term off
 set feed off
+set markup csv on
 spool {}
-{}
 {}
 exit
 """
@@ -76,26 +76,16 @@ def define(args):
 
 def export(arg):
    "get a CSV of data from ORACLE"
-   table = clean_tablename(args.table)
-   config = get_config(args)[table]
-
-   #make a sql query to output the first line header of the CSV.
-   columns  = [c[0] for c in config["columns"]]
-   header_text = f"'{','.join(columns)}'"
-   header_sql = f"select {header_text} from DUAL;"
-   logging.info(header_sql)
-
-   # Make the select for the ebody of the CSV.
-   #  Trim all strings.
-   body_items = []
-   for column, type in config["columns"]:
-      if "TEXT" in type: column = f"TRIM({column})"
-      body_items.append(column)
-   body_items = "||','||".join(body_items)
-   body_sql = config["select"].format(body_items)
+   table_name = os.path.splitext(os.path.basename(args.schema_file))[0]
+   output_file = os.path.join(args.output_dir, f"{table_name}.export")
+   conn = sqlite3 .connect(args.db)
+   schema = pd.read_csv(args.schema_file)
+   columns  = ["{}".format(row.column_name) for _ , row  in schema.iterrows() if row.include == 't']
+   items = ",".join(columns)
+   body_sql = f"SELECT {items} FROM {table_name} WHERE ROWNUM < 20;"
    logging.info(body_sql)
    #make the stuff we need to spool the answer
-   sql_script  = prefix_template.format(table, header_sql, body_sql)
+   sql_script  = prefix_template.format(output_file, body_sql)
    print (sql_script)
    
    
@@ -221,8 +211,8 @@ if __name__ == "__main__":
     # export from Oracle
     parser = subparsers.add_parser('export', help=export.__doc__)
     parser.set_defaults(func=export)
-    parser.add_argument("table", help = "a table of interest")
-    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./schemas") 
+    parser.add_argument("schema_file", help = "schema file")
+    parser.add_argument("-o", "--output_dir", help = "def ./exports", default="./exports") 
 
     # create tables in sqlite2
     parser = subparsers.add_parser('create', help=create.__doc__)
