@@ -2,7 +2,17 @@
 #
 #  Remake the sqlilte DB
 #
-DB=desdm-test.db
+
+ROOT=desdm-test
+DB=$ROOT.db
+LOG=$ROOT.log
+
+rm -f "$DB"
+rm -f "$LOG"
+#logtime() { echo `date` >> $LOG  }
+#logsize() { echo ls -lh $DB >> $LOG }
+#logtext() { echo $* >> $LOG }
+
 if [ -e "$DB" ] ; then 
     echo removing $DD
     rm $DB ;
@@ -20,8 +30,11 @@ for csv in *.csv ; do
     time $cmd
     done
 
+
 for csv in *.csv ; do
     cmd="./ingest.py --db $DB index  $csv"
     echo $cmd
     time $cmd
     done
+
+cat $LOG

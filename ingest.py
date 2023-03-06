@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-A small framework to assess the feasiblity of post-desdm databases.
+ small framework to assess the feasiblity of post-desdm databases.
 and if DBs are feasible to inform a selection.
 
 the companion ".toml" file holf
@@ -15,6 +15,7 @@ import logging
 import toml 
 import pprint
 import os
+import sys 
 
 prefix_template = """
 set pagesize 0   
@@ -24,7 +25,12 @@ set headsep off
 set linesize 120
 set numw  120
 set echo off
-spool {}.csv
+set term off
+set feed off
+spool {}
+{}
+{}
+exit
 """
 
 def clean_tablename(table):
@@ -51,6 +57,21 @@ def list(args):
    for key in config:
       pprint.pprint(key)
 
+def define(args):
+   """
+   Emit a CSV listing columns in an ORACLE table as a .schema file.
+   
+   
+   The CSV can be used to designate columns to be 
+   carried forward to SQLite.
+
+   """
+   table_name = os.path.splitext(os.path.basename(args.import_file))[0]
+   output_file = os.path.join(args.output_dir, f"{table_name}.schema")
+   header_sql = "select 'column_name,data_type,include' FROM DUAL;"
+   body_sql = f"SELECT column_name||','||data_type||',t' FROM all_tab_columns WHERE table_name =  '{table_name}' ;"
+   sql_script = prefix_template.format(output_file, header_sql, body_sql)
+   print (sql_script)
 
 def export(arg):
    "get a CSV of data from ORACLE"
@@ -60,7 +81,8 @@ def export(arg):
    #make a sql query to output the first line header of the CSV.
    columns  = [c[0] for c in config["columns"]]
    header_text = f"'{','.join(columns)}'"
-   header_sql = f"select {header_text} from DUAL; \n"
+   header_sql = f"select {header_text} from DUAL;"
+   logging.info(header_sql)
 
    # Make the select for the ebody of the CSV.
    #  Trim all strings.
@@ -70,12 +92,10 @@ def export(arg):
       body_items.append(column)
    body_items = "||','||".join(body_items)
    body_sql = config["select"].format(body_items)
-
+   logging.info(body_sql)
    #make the stuff we need to spool the answer
-   prefix = prefix_template.format(table)
-
-   sql = prefix + header_sql + body_sql
-   print (sql)
+   sql_script  = prefix_template.format(table, header_sql, body_sql)
+   print (sql_script)
    
    
 def create(args):
@@ -84,6 +104,7 @@ def create(args):
    conn = sqlite3 .connect(args.db)
    table = clean_tablename(args.table)
    config = get_config(args)[table]
+   columns  = config["columns"]
    values = ["{} {}".format(c[0], c[1]) for c in columns]
    values = ",".join(values)
    values = "({})".format(values)
@@ -147,6 +168,16 @@ def plan(args):
    cur = conn.cursor()
    result = cur.execute(query)
    for r in result: print(r)
+
+def progress(args):
+   "printn a dot every 1000 lines"
+   count = 0
+   while sys.stdin.readline():
+      if count % 1000 == 0 : 
+         sys.stdout.write('.')
+         sys.stdout.flush()
+      count += 1
+   sys.stdout.write('\n')
 
 def shell(args):
    "start  an sqlilte shell against DB"
@@ -224,6 +255,17 @@ if __name__ == "__main__":
     #  show plan for   named  canned demo query from toml file
     parser = subparsers.add_parser('shell', help=shell.__doc__)
     parser.set_defaults(func=shell)
+
+    #  show plan for   named  canned demo query from toml file
+    parser = subparsers.add_parser('progress', help=progress.__doc__)
+    parser.set_defaults(func=progress)
+
+    # make a CSV defining which columsn shod be carried forward to SQLITE
+    parser = subparsers.add_parser('define', help=define.__doc__)
+    parser.set_defaults(func=define)
+    parser.add_argument("import_file", help = "table ") 
+    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./schemas") 
+
 
     args = main_parser.parse_args()
     loglevel=logging.__dict__[args.loglevel]

@@ -1,4 +1,4 @@
-[y6a1_file_archive_info]
+[y6a2_file_archive_info]
 
 columns = [
   ["filename", "TEXT"],
@@ -9,7 +9,7 @@ indexes = ["filename"]
 select = "SELECT {} from y6a1_file_archive_info ; "
 create = "CREATE TABLE IF NOT Exists y6a1_file_archive_info {} ;" 
 ##########################
-[y6a1_proctag]
+[y6a2_proctag]
 
 columns = [
    ["pfw_attempt_id", "INTEGER"],
@@ -20,7 +20,7 @@ indexes = ["tag", "pfw_attempt_id"]
 select = "SELECT {}  from y6a1_proctag;"
 create = "CREATE TABLE IF NOT Exists  y6a1_proctag {} ; "
 ##########################
-[y6a1_image]
+[y6a2_image]
 
 columns = [
            ["pfw_attempt_id", "INTEGER"],  
@@ -38,18 +38,18 @@ select = "SELECT  {} FROM y6a1_image ;"
 create = "CREATE TABLE IF NOT EXISTS y6a1_image {} ;"
 
 ##########################
-[pfw_attempt_id]
+[y6a2_exclude_list]
 
 columns = [
-   ["tilename",     "TEXT"],
-   ["coadd_nwgint", "TEXT"],
-   ["expnum",       "INTEGER"],
-   ["ccdnum",       "INTEGER"]
+   ["expnum", "INTEGER"],
+   ["ccdum",  "INTEGER"],
+   ["reason", "TEXT"],
+   ["analyst,  "TEXT"]
    ]
-indexes = ["tilename", "expnum", "ccdnum", "coadd_nwgint"]
+indexes = []
 
-select = "SELECT {} FROM pfw_attempt_id ;"
-create = "CREATE {} IF NOT EXISTS pfw_attempt_id {}; commit;"
+select = "SELECT {} FROM y6a2_exclude_list ;"
+create = "CREATE {} IF NOT EXISTS y6a2_exclude_list {}; commit;"
 
 ##########################
 #
