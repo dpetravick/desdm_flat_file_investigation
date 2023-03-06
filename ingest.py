@@ -16,6 +16,7 @@ import toml
 import pprint
 import os
 import sys 
+import pandas as pd
 
 prefix_template = """
 set pagesize 0   
@@ -99,18 +100,21 @@ def export(arg):
    
    
 def create(args):
-   "make schema for table" 
-   config = get_config(args)
+   "make schema for table"
+   table_name = os.path.splitext(os.path.basename(args.schema_file))[0]
+   output_file = os.path.join(args.output_dir, f"{table_name}.create")
    conn = sqlite3 .connect(args.db)
-   table = clean_tablename(args.table)
-   config = get_config(args)[table]
-   columns  = config["columns"]
-   values = ["{} {}".format(c[0], c[1]) for c in columns]
+   schema = pd.read_csv(args.schema_file)
+   values = ["{} {}".format(row.column_name, row.data_type) for _ , row  in schema.iterrows() if row.include == 't']
    values = ",".join(values)
-   values = "({})".format(values)
-   sql = config["create"].format(values)
-   print (sql)
-   conn.execute(sql)
+   values = f"({values})"
+   drop_sql = f"DROP TABLE IF EXISTS {table_name}"
+   create_sql = f"CREATE TABLE IF NOT EXISTS {table_name} {values}"
+   conn.execute(drop_sql)
+   conn.execute(create_sql)
+   with open(output_file,"w") as f:
+      f.write(drop_sql + "\n")
+      f.write(create_sql + "\n")
 
 
 def show(args):
@@ -218,11 +222,13 @@ if __name__ == "__main__":
     parser = subparsers.add_parser('export', help=export.__doc__)
     parser.set_defaults(func=export)
     parser.add_argument("table", help = "a table of interest")
+    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./schemas") 
 
     # create tables in sqlite2
     parser = subparsers.add_parser('create', help=create.__doc__)
     parser.set_defaults(func=create)
-    parser.add_argument("table", help = "a table of interest")
+    parser.add_argument("schema_file", help = "schema_file")
+    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./creates") 
 
     # ingest csv into  sqlite2
     parser = subparsers.add_parser('ingest', help=ingest.__doc__)
@@ -233,6 +239,7 @@ if __name__ == "__main__":
     parser = subparsers.add_parser('index', help=index.__doc__)
     parser.set_defaults(func=index)
     parser.add_argument("table", help = "table to index")
+    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./schemas") 
 
     # list known tables in toml file 
     parser = subparsers.add_parser('list', help=list.__doc__)
