@@ -120,20 +120,25 @@ def ingest(args):
    logging.info(f"about to read {args.csv}")
    df = pd.read_csv(args.csv)
    print (df)
-   table = clean_tablename(args.csv)
+   table = os.path.splitext(os.path.basename(args.csv))[0]
    logging.info(f"about to ingest into table {table}")
    conn = sqlite3.connect(args.db)
-   df.to_sql(table, conn, if_exists='append', index = False)
+   df.to_sql(table, conn, if_exists='replace', index = False)
 
 def index(args):
    "indexe the DB"
-   table = clean_tablename(args.table)
-   config = get_config(args)[table]
-   conn = sqlite3.connect(args.db)
-   for indexed_columns  in config["indexes"]:
+   table_name = os.path.splitext(os.path.basename(args.def_file))[0]
+   conn = sqlite3 .connect(args.db)
+   with open(args.def_file, 'r') as f: lines = f.read()
+   for indexed_columns  in lines.split("\n"):
+
+      #discard comments and blank lines 
+      indexed_columns = indexed_columns.split("#")[0]
+      indexed_columns = indexed_columns.strip()
+      if not indexed_columns : continue
       indexname = [col.strip() for col in indexed_columns .split(",")]
       indexname = "_".join(indexname)
-      indexname = f"{table}__{indexname}_idx"
+      indexname = f"{table_name}__{indexname}_idx"
       sql = f"CREATE INDEX IF NOT EXISTS {indexname} ON {table} ({indexed_columns}) ;"
       print (sql)
       conn.execute(sql)
@@ -227,8 +232,8 @@ if __name__ == "__main__":
     # builld indexes 
     parser = subparsers.add_parser('index', help=index.__doc__)
     parser.set_defaults(func=index)
-    parser.add_argument("table", help = "table to index")
-    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./schemas") 
+    parser.add_argument("def_file", help = "file named by table with index defnintions")
+
 
     # list known tables in toml file 
     parser = subparsers.add_parser('list', help=list.__doc__)
