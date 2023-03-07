@@ -139,7 +139,7 @@ def index(args):
       indexname = [col.strip() for col in indexed_columns .split(",")]
       indexname = "_".join(indexname)
       indexname = f"{table_name}__{indexname}_idx"
-      sql = f"CREATE INDEX IF NOT EXISTS {indexname} ON {table} ({indexed_columns}) ;"
+      sql = f"CREATE INDEX IF NOT EXISTS {indexname} ON {table_name} ({indexed_columns}) ;"
       print (sql)
       conn.execute(sql)
 
