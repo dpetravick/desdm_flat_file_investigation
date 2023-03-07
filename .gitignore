@@ -1,2 +1,7 @@
 *~
 *.csv
+creates/
+exports/
+imports/
+indicies/*.tim
+

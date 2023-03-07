@@ -83,7 +83,9 @@ def export(arg):
    schema = pd.read_csv(args.schema_file)
    columns  = ["TRIM({}) {}".format(row.COLUMN_NAME, row.COLUMN_NAME) for _ , row  in schema.iterrows() if row.INCLUDE == 't']
    items = ",".join(columns)
-   body_sql = f"SELECT {items} FROM {table_name} WHERE ROWNUM < 20;"
+   hack = ""
+   hack = " WHERE rownum < 10000 "
+   body_sql = f"SELECT {items} FROM {table_name} {hack};"
    logging.info(body_sql)
    #make the stuff we need to spool the answer
    sql_script  = prefix_template.format(output_file, body_sql)

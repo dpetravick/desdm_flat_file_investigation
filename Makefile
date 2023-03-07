@@ -1,5 +1,4 @@
 
-
 #
 # make all the list of files needed. 
 #
@@ -19,30 +18,31 @@ INDEX_TIME_FILES := $(patsubst imports/%.import,indicies/%.time   ,$(IMPORT_FILE
 # from a file naming a table to import to ..
 # a CSV alloing us to say what columns to import
 ./schemas/%.schema:./imports/%.import 
-	./ingest.py define $< > temp.sql
-	sqlplus donaldp/don70chips2@desdb-sci.ncsa.illinois.edu/dessci @temp.sql
+	echo $@ $<
+	./ingest.py define $< > temp.sql   # make schema CSV files 
+	sqlplus donaldp/don70chips2@desdb-sci.ncsa.illinois.edu/dessci @temp.sql  > /dev/null
 	rm temp.sql
 
 ./creates/%.create:./schemas/%.schema 
-	./ingest.py create $<
+	./ingest.py create $< # make tables in SQLITE 
 
 ./exports/%.export:./schemas/%.schema 
-	./ingest.py export $< > temp.sql
+	./ingest.py export $< > temp.sql  # ORACLE DATA -> csv
 	cat temp.sql
-	sqlplus donaldp/don70chips2@desdb-sci.ncsa.illinois.edu/dessci @temp.sql
+	sqlplus donaldp/don70chips2@desdb-sci.ncsa.illinois.edu/dessci @temp.sql > /dev/null
 	rm temp.sql
 
 ./ingests/%.ingest:./exports/%.export
-	./ingest.py ingest $< 
+	./ingest.py ingest $<     # CSV -> sqlite 
 	touch $@
 
 ./indicies/%.time: ./indicies/%.def
-	echo updating time $< and making index 
+	echo updating time $< and making inde   x 
 	touch $@
-	(file=$@; ./ingest.py index "$${file%.*}.def")
+	(file=$@; ./ingest.py index "$${file%.*}.def") # make index in sqlite
 
 ./indicies/%.def : ./ingests/%.ingest
-	true 
+	true   
 	#./ingest.py index $@
 	#touch $@ # update or create the def file 
 

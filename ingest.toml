@@ -1,55 +1,3 @@
-[y6a2_file_archive_info]
-
-columns = [
-  ["filename", "TEXT"],
-  ["path",     "TEXT"]
-  ]
-indexes = ["filename"]
-
-select = "SELECT {} from y6a1_file_archive_info ; "
-create = "CREATE TABLE IF NOT Exists y6a1_file_archive_info {} ;" 
-##########################
-[y6a2_proctag]
-
-columns = [
-   ["pfw_attempt_id", "INTEGER"],
-   ["tag",            "TEXT"]  
-   ]
-indexes = ["tag", "pfw_attempt_id"]
-
-select = "SELECT {}  from y6a1_proctag;"
-create = "CREATE TABLE IF NOT Exists  y6a1_proctag {} ; "
-##########################
-[y6a2_image]
-
-columns = [
-           ["pfw_attempt_id", "INTEGER"],  
-           ["filetype",       "TEXT"],
-           ["filename",       "TEXT"], 
-           ["expnum",         "INTEGER"],
-           ["ccdnum",         "INTEGER"],
-           ["tilename",       "TEXT"]
-          ]
-#indexes = ["pfw_attempt_id", "filetype", "filename", "tilename", "expnum", "ccdnum"]
-#indexes = ["pfw_attempt_id",  "filename, filetype", "tilename", "expnum, ccdnum"]
-indexes = ["pfw_attempt_id",  "tilename, filename, filetype", "expnum, ccdnum"]
-
-select = "SELECT  {} FROM y6a1_image ;"
-create = "CREATE TABLE IF NOT EXISTS y6a1_image {} ;"
-
-##########################
-[y6a2_exclude_list]
-
-columns = [
-   ["expnum", "INTEGER"],
-   ["ccdum",  "INTEGER"],
-   ["reason", "TEXT"],
-   ["analyst,  "TEXT"]
-   ]
-indexes = []
-
-select = "SELECT {} FROM y6a2_exclude_list ;"
-create = "CREATE {} IF NOT EXISTS y6a2_exclude_list {}; commit;"
 
 ##########################
 #
@@ -57,12 +5,39 @@ create = "CREATE {} IF NOT EXISTS y6a2_exclude_list {}; commit;"
 # 
 #########################
 
-[uc-se-into-coadd]
+[find-coadds]
+type="query"
+doc="How to find a set of coadd images"
+ref="https://opensource.ncsa.illinois.edu/confluence/pages/viewpage.action?spaceKey=DESDM&title=Y6A1+Release+Notes"
+query="""
+SELECT fai.path, fai.filename, fai.compression
+FROM y6a2_proctag t, y6a2_coadd c, y6a2_file_archive_info fai 
+WHERE t.tag='Y6A2_COADD' 
+    and t.pfw_attempt_id=c.pfw_attempt_id 
+    and c.filename=fai.filename
+    and c.band='z';	
+"""
+
+[objects_in_file]
+type="query"
+doc="How to FTS tabels for  coadd objects for a single-tile:"
+ref="https://opensource.ncsa.illinois.edu/confluence/pages/viewpage.action?spaceKey=DESDM&title=Y6A1+Release+Notes"
+query="""
+SELECT fai.path, fai.filename, fai.compression
+FROM y6a2_catalog c, y6a2_file_archive_info fai 
+WHERE c.tilename='DES0000+0209'
+    and c.filetype='coadd_cat'
+    and c.filename=fai.filename;
+"""
+
+[se-into-coadd]
+type="query"
 doc="How to find the single epoch images that went into a tile"
+ref="https://opensource.ncsa.illinois.edu/confluence/pages/viewpage.action?spaceKey=DESDM&title=Y6A1+Release+Notes"
 query= """
 select fai.path,fai.filename
-from y6a1_proctag t, y6a1_image i, y6a1_image j, y6a1_file_archive_info fai
-where t.tag='Y6A1_COADD'
+from y6a2_proctag t, y6a2_image i, y6a2_image j, y6a2_file_archive_info fai
+where t.tag='Y6A2_COADD'
     and t.pfw_attempt_id=i.pfw_attempt_id
     and i.tilename='DES0000+0209'
     and i.filetype='coadd_nwgint'
@@ -70,3 +45,34 @@ where t.tag='Y6A1_COADD'
     and j.filetype='red_immask'
     and j.filename=fai.filename;
 """
+
+
+[se-at-specific-ra-dec]
+type="query"
+doc="How to find the single epoch images that went into a tile"
+ref="https://opensource.ncsa.illinois.edu/confluence/pages/viewpage.action?spaceKey=DESDM&title=Y6A1+Release+Notes"
+query="""
+SELECT fai.path,fai.filename,fai.compression
+FROM y6a2_file_archive_info fai, y6a2_image i, y6a2_proctag t
+WHERE t.tag='Y6A2_FINALCUT'
+    and t.pfw_attempt_id=i.pfw_attempt_id
+    and i.filetype='red_immask'
+    and i.filename=fai.filename
+    and 3.1 between i.racmin and i.racmax
+    and -30.4 between i.deccmin and i.deccmax;
+"""
+
+[MOF-catalogs]
+type="query"
+doc="How to obtain the raw MOF and SOF catalogs:"
+ref="https://opensource.ncsa.illinois.edu/confluence/pages/viewpage.action?spaceKey=DESDM&title=Y6A1+Release+Notes"
+query="""
+SELECT fai.path,fai.filename,fai.compression
+FROM y6a2_file_archive_info fai, y6a2_miscfile m, y6a2_proctag t
+WHERE t.tag='Y6A2_MOF_V1'
+    and t.pfw_attempt_id=m.pfw_attempt_id
+    and m.filetype='coadd_mof'
+    and m.filename=fai.filename
+    and m.tilename='DES0000+0209'
+"""
+
