@@ -4,7 +4,7 @@
 and if DBs are feasible to inform a selection.
 
 the companion ".toml" file holf
-- Mapping from one db to another.
+-  from one db to another.
 - queries used in the evalution.
 
 Optons available via <command> --help
@@ -69,9 +69,8 @@ def define(args):
    """
    table_name = os.path.splitext(os.path.basename(args.import_file))[0]
    output_file = os.path.join(args.output_dir, f"{table_name}.schema")
-   header_sql = "select 'column_name,data_type,include' FROM DUAL;"
-   body_sql = f"SELECT column_name||','||data_type||',t' FROM all_tab_columns WHERE table_name =  '{table_name}' ;"
-   sql_script = prefix_template.format(output_file, header_sql, body_sql)
+   body_sql = f"SELECT COLUMN_NAME, DATA_TYPE,'t' INCLUDE FROM all_tab_columns WHERE table_name =  '{table_name}' ;"
+   sql_script = prefix_template.format(output_file, body_sql)
    print (sql_script)
 
 def export(arg):
@@ -80,7 +79,7 @@ def export(arg):
    output_file = os.path.join(args.output_dir, f"{table_name}.export")
    conn = sqlite3 .connect(args.db)
    schema = pd.read_csv(args.schema_file)
-   columns  = ["{}".format(row.column_name) for _ , row  in schema.iterrows() if row.include == 't']
+   columns  = ["TRIM({}) {}".format(row.COLUMN_NAME, row.COLUMN_NAME) for _ , row  in schema.iterrows() if row.INCLUDE == 't']
    items = ",".join(columns)
    body_sql = f"SELECT {items} FROM {table_name} WHERE ROWNUM < 20;"
    logging.info(body_sql)
@@ -95,7 +94,7 @@ def create(args):
    output_file = os.path.join(args.output_dir, f"{table_name}.create")
    conn = sqlite3 .connect(args.db)
    schema = pd.read_csv(args.schema_file)
-   values = ["{} {}".format(row.column_name, row.data_type) for _ , row  in schema.iterrows() if row.include == 't']
+   values = ["{} {}".format(row.COLUMN_NAME, row.DATA_TYPE) for _ , row  in schema.iterrows() if row.INCLUDE == 't']
    values = ",".join(values)
    values = f"({values})"
    drop_sql = f"DROP TABLE IF EXISTS {table_name}"
