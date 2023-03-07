@@ -132,7 +132,7 @@ def ingest(args):
    df.to_sql(table, conn, if_exists='replace', index = False)
 
 def index(args):
-   "indexe the DB"
+   "index the DB"
    table_name = os.path.splitext(os.path.basename(args.def_file))[0]
    conn = sqlite3 .connect(args.db)
    with open(args.def_file, 'r') as f: lines = f.read()
