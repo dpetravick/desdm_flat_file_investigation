@@ -68,6 +68,7 @@ def define(args):
 
    """
    table_name = os.path.splitext(os.path.basename(args.import_file))[0]
+   logging.info(f"Obtainings schema for {table_name} from ORACLE")
    output_file = os.path.join(args.output_dir, f"{table_name}.schema")
    body_sql = f"SELECT COLUMN_NAME, DATA_TYPE,'t' INCLUDE FROM all_tab_columns WHERE table_name =  '{table_name}' ;"
    sql_script = prefix_template.format(output_file, body_sql)
@@ -76,6 +77,7 @@ def define(args):
 def export(arg):
    "get a CSV of data from ORACLE"
    table_name = os.path.splitext(os.path.basename(args.schema_file))[0]
+   logging.info(f"getting {table_name} as CSV from ORACLE")
    output_file = os.path.join(args.output_dir, f"{table_name}.export")
    conn = sqlite3 .connect(args.db)
    schema = pd.read_csv(args.schema_file)
@@ -91,6 +93,7 @@ def export(arg):
 def create(args):
    "make schema for table"
    table_name = os.path.splitext(os.path.basename(args.schema_file))[0]
+   logging.info(f"making table {table_name} in SQLITE3")
    output_file = os.path.join(args.output_dir, f"{table_name}.create")
    conn = sqlite3 .connect(args.db)
    schema = pd.read_csv(args.schema_file)
@@ -121,7 +124,7 @@ def ingest(args):
    df = pd.read_csv(args.csv)
    print (df)
    table = os.path.splitext(os.path.basename(args.csv))[0]
-   logging.info(f"about to ingest into table {table}")
+   logging.info(f"about to ingest CSV into table {table}")
    conn = sqlite3.connect(args.db)
    df.to_sql(table, conn, if_exists='replace', index = False)
 
@@ -139,6 +142,7 @@ def index(args):
       indexname = [col.strip() for col in indexed_columns .split(",")]
       indexname = "_".join(indexname)
       indexname = f"{table_name}__{indexname}_idx"
+      logging.info(f"making index {indexname} in sqlite ")
       sql = f"CREATE INDEX IF NOT EXISTS {indexname} ON {table_name} ({indexed_columns}) ;"
       print (sql)
       conn.execute(sql)
