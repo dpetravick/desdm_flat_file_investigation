@@ -15,7 +15,8 @@ import logging
 import toml 
 import pprint
 import os
-import sys 
+import sys
+import time 
 import pandas as pd
 
 prefix_template = """
@@ -161,6 +162,22 @@ def query(args):
    result = cur.execute(query)
    for r in result: print(r)
 
+def test_db(args):
+   "test the db by doing all the test queries"
+   config = get_config(args)
+   conn = sqlite3.connect(args.db)
+   for key in config:
+      if config[key]['type'] != 'query' : continue
+      print(f'{config[key]["doc"]}')
+      query = config[key]["query"]
+      logging.debug(f'{query}')
+      cur = conn.cursor()
+      t0 =  time.time()
+      result = cur.execute(query)
+      result  = [r for r in result]
+      print (f"{len(result)} returned in {time.time()-t0} seconds")
+      
+
 def plan(args):
    "perform an explain of a query"
    config = get_config(args)[args.query]
@@ -273,6 +290,9 @@ if __name__ == "__main__":
     parser.add_argument("import_file", help = "table ") 
     parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./schemas") 
 
+    # test the DB
+    parser = subparsers.add_parser('test_db', help=test_db.__doc__)
+    parser.set_defaults(func=test_db)
 
     args = main_parser.parse_args()
     loglevel=logging.__dict__[args.loglevel]
