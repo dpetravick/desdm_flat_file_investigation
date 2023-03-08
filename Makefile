@@ -47,8 +47,8 @@ $(INGEST_DIR)/%.ingest:$(EXPORT_DIR)/%.export
 	touch $@
 
 $(INDEX_DIR)/%.time: $(INDEX_DIR)/%.def
-	echo updating time $< and making inde   x 
-	touch $@
+	echo updating time $< and making index 
+	touch $@ #hey
 	(file=$@; ./ingest.py index "$${file%.*}.def") # make index in sqlite
 
 $(INDEX_DIR)/%.def : $(INGEST_DIR)/%.ingest

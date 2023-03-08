@@ -18,6 +18,7 @@ import os
 import sys
 import time 
 import pandas as pd
+import tabulate
 
 prefix_template = """
 set pagesize 0   
@@ -117,9 +118,18 @@ def show(args):
    config = get_config(args)
    conn = sqlite3 .connect(args.db)
    cur = conn.cursor()
-   result = cur.execute("SELECT name FROM sqlite_master;")
-   for r in result: print(r)
-   
+   result = cur.execute("SELECT type, name FROM sqlite_master;").fetchall()
+   info = []
+   for ttype, table in result:
+      if ttype == "table":
+         sql = f"select max(RowId) from {table} ;"
+         nrow = cur.execute(sql).fetchall()[0][0]
+         info.append((ttype, table, nrow))
+      else:
+         info.append((ttype, table, ""))
+   report  = tabulate.tabulate(info, headers=["type", "name", "nrow"])
+   print (report)
+
 def ingest(args):
    "ingest a csv into  sqlite"
    import pandas as pd
@@ -131,6 +141,18 @@ def ingest(args):
    conn = sqlite3.connect(args.db)
    df.to_sql(table, conn, if_exists='replace', index = False)
 
+def ingest(args):
+   import subprocess
+   table = os.path.splitext(os.path.basename(args.csv))[0]
+   db_name = args.db
+   result = subprocess.run(['sqlite3',
+                         str(db_name),
+                         '-cmd',
+                         '.mode csv',
+                         '.import ' + str(args.csv)
+                                 + f' {table}'])
+   
+   
 def index(args):
    "index the DB"
    table_name = os.path.splitext(os.path.basename(args.def_file))[0]
