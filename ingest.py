@@ -131,18 +131,9 @@ def show(args):
    print (report)
 
 def ingest(args):
-   "ingest a csv into  sqlite"
-   import pandas as pd
-   logging.info(f"about to read {args.csv}")
-   df = pd.read_csv(args.csv)
-   print (df)
-   table = os.path.splitext(os.path.basename(args.csv))[0]
-   logging.info(f"about to ingest CSV into table {table}")
-   conn = sqlite3.connect(args.db)
-   df.to_sql(table, conn, if_exists='replace', index = False)
-
-def ingest(args):
+   "ingest a csv into sqlite"
    import subprocess
+   logging.info(f"about to read {args.csv}")
    table = os.path.splitext(os.path.basename(args.csv))[0]
    db_name = args.db
    result = subprocess.run(['sqlite3',
@@ -151,8 +142,7 @@ def ingest(args):
                          '.mode csv',
                          '.import ' + str(args.csv)
                                  + f' {table}'])
-   
-   
+
 def index(args):
    "index the DB"
    table_name = os.path.splitext(os.path.basename(args.def_file))[0]
@@ -190,7 +180,7 @@ def test_db(args):
    conn = sqlite3.connect(args.db)
    for key in config:
       if config[key]['type'] != 'query' : continue
-      print(f'{config[key]["doc"]}')
+      print(f'{key}:{config[key]["doc"]}')
       query = config[key]["query"]
       logging.debug(f'{query}')
       cur = conn.cursor()

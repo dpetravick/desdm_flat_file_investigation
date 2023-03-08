@@ -20,7 +20,7 @@ WHERE t.tag='Y6A2_COADD'
 
 [objects_in_file]
 type="query"
-doc="How to FITS tables for  coadd objects for a single-tile:"
+doc="How to find FITS tables for  coadd objects for a single-tile:"
 ref="https://opensource.ncsa.illinois.edu/confluence/pages/viewpage.action?spaceKey=DESDM&title=Y6A1+Release+Notes"
 query="""
 SELECT fai.path, fai.filename, fai.compression
