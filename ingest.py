@@ -19,6 +19,8 @@ import sys
 import time 
 import pandas as pd
 import tabulate
+import configparser
+import subprocess
 
 prefix_template = """
 set pagesize 0   
@@ -130,9 +132,9 @@ def show(args):
    report  = tabulate.tabulate(info, headers=["type", "name", "nrow"])
    print (report)
 
+
 def ingest(args):
    "ingest a csv into sqlite"
-   import subprocess
    logging.info(f"about to read {args.csv}")
    table = os.path.splitext(os.path.basename(args.csv))[0]
    db_name = args.db
@@ -143,10 +145,34 @@ def ingest(args):
                          '.import ' + str(args.csv)
                                  + f' {table}'])
 
+def deindex(args):
+   "drop all indexes"
+   logging.info(f"about to drop all indexes")
+   conn = sqlite3 .connect(args.db)
+   cur = conn.cursor()
+   for type, name in result:
+      sql = f"drop index {name};"
+      logging.info(sql)
+      cur.execute(sql)
+
+
 def index(args):
-   "index the DB"
+   """
+   For a table, Drop indexes and then  apply indexes specified in the def file
+   """
    table_name = os.path.splitext(os.path.basename(args.def_file))[0]
    conn = sqlite3 .connect(args.db)
+   cur=conn.cursor()
+
+   # drop any existing indexes on table
+   sql = f"SELECT type, name FROM sqlite_master where type = 'index' and  tbl_name = '{table_name}'"
+   result = cur.execute(sql)
+   for ttype, name in result:
+      sql = f"DROP INDEX {name};"
+      logging.info(sql) 
+      cur.execute(sql) 
+
+   # apply new indexes
    with open(args.def_file, 'r') as f: lines = f.read()
    for indexed_columns  in lines.split("\n"):
 
@@ -212,11 +238,10 @@ def progress(args):
       count += 1
    sys.stdout.write('\n')
 
+
 def shell(args):
-   "start  an sqlilte shell against DB"
-   cmd = f"rlwrap sqlite3 {args.db}"
-   import sys
-   import subprocess
+   "start an sqlilte shell against DB"
+   cmd = f"sqlite3 {args.db}"
    help = """                                                                      
 .excel                   Display the output of next command in spreadsheet      
 .headers on|off          Turn display of headers on or off                      
@@ -232,6 +257,27 @@ def shell(args):
    print(help)
    subprocess.run(cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr, shell=True)
    
+
+def sqlplus(args):
+   "start an sqlplus session using info from  $HOME/.desservices.ini"
+
+   # get info from desservices.inifile for connection
+   home = os.environ["HOME"]
+   config = configparser.ConfigParser()
+   config.read(os.path.join(home, ".desservices.ini"))
+   service=args.service
+   user= config[service]["user"]
+   passwd = config[service]["passwd"]
+   server = config[service]["server"]
+
+   # process any arguments to sqlplus
+   cmd_args = ""
+   if args.cmd_args : cmd_args = " ".join(args.cmd_args)
+
+   cmd=f'rlwrap sqlplus {user}/{passwd}@{server}/{service} {cmd_args}'
+   print (cmd)
+   subprocess.run(cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr, shell=True)
+
 
 if __name__ == "__main__":
 
@@ -305,6 +351,17 @@ if __name__ == "__main__":
     # test the DB
     parser = subparsers.add_parser('test_db', help=test_db.__doc__)
     parser.set_defaults(func=test_db)
+
+    # test the DB
+    parser = subparsers.add_parser('deindex', help=deindex.__doc__)
+    parser.set_defaults(func=deindex)
+
+    # sqlplus
+    parser = subparsers.add_parser('sqlplus', help=sqlplus.__doc__)
+    parser.set_defaults(func=sqlplus)
+    parser.add_argument("-s", "--service", help = "which service", default="dessci") 
+    parser.add_argument("cmd_args", help = "any args to sqlplus", nargs='*')
+
 
     args = main_parser.parse_args()
     loglevel=logging.__dict__[args.loglevel]
