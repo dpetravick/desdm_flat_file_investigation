@@ -14,8 +14,7 @@ SELECT fai.path, fai.filename, fai.compression
 FROM y6a2_proctag t, y6a2_coadd c, y6a2_file_archive_info fai 
 WHERE t.tag='Y6A2_COADD' 
     and t.pfw_attempt_id=c.pfw_attempt_id 
-    and c.filename=fai.filename
-    and c.band='z';	
+    and c.filename=fai.filename ;
 """
 
 [objects_in_file]

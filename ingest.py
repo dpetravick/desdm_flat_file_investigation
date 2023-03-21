@@ -142,7 +142,7 @@ def ingest(args):
                          str(db_name),
                          '-cmd',
                          '.mode csv',
-                         '.import ' + str(args.csv)
+                         '.import  --skip 2 ' + str(args.csv)
                                  + f' {table}'])
 
 def deindex(args):
