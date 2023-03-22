@@ -14,7 +14,8 @@ SELECT fai.path, fai.filename, fai.compression
 FROM y6a2_proctag t, y6a2_coadd c, y6a2_file_archive_info fai 
 WHERE t.tag='Y6A2_COADD' 
     and t.pfw_attempt_id=c.pfw_attempt_id 
-    and c.filename=fai.filename ;
+    and c.filename=fai.filename 
+    and c.band = 'z';
 """
 
 [objects_in_file]
@@ -53,7 +54,7 @@ ref="https://opensource.ncsa.illinois.edu/confluence/pages/viewpage.action?space
 query="""
 SELECT fai.path,fai.filename,fai.compression
 FROM y6a2_file_archive_info fai, y6a2_image i, y6a2_proctag t
-WHERE t.tag='Y6A2_FINALCUT'
+WHERE t.tag='Y6A1_FINALCUT'
     and t.pfw_attempt_id=i.pfw_attempt_id
     and i.filetype='red_immask'
     and i.filename=fai.filename

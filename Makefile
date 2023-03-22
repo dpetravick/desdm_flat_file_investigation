@@ -1,7 +1,7 @@
 IMPORT_DIR  := ./d1_imports
 SCHEMA_DIR  := ./d2_schemas
-CREATE_DIR  := ./d3_creates
-EXPORT_DIR  := ./d4_exports
+EXPORT_DIR  := ./d3_exports
+CREATE_DIR  := ./d4_creates
 INGEST_DIR  := ./d5_ingests
 INDEX_DIR   := ./d6_indicies
 #
@@ -56,33 +56,46 @@ $(INDEX_DIR)/%.def : $(INGEST_DIR)/%.ingest
 	#./ingest.py index $@
 	#touch $@ # update or create the def file 
 
+
+all : creates indicies
+
+
+indicies : $(INDEX_TIME_FILES)
+
+schema : $(SCHEMA_FILES)
+
+creates : $(CREATE_FILES)
+
+exported : $(EXPORT_FILES)
+
+ingests : $(INGEST_FILES)
+
+#
+#  tests 
+#
 test: 
 	./ingest.py test_db
 
-all : all_creates all_indicies
 
-all_indicies : $(INDEX_TIME_FILES)
-	echo 
+#
+#  Cleaning
+#
+#
 
-all_schema : $(SCHEMA_FILES)
+# all timestamps in the index dir
+clean_indicies:
+	rm -f $(INDEX_DIR)/*.time  #remove index created time stame
 
-all_creates : $(CREATE_FILES)
-
-all_exported : $(EXPORT_FILES)
-
-all_ingests : $(INGEST_FILES)
-
-
-
-clean:
-	rm -f $(CREATE_DIR)/*
-	rm -f $(EXPORT_DIR)/*
-	rm -f $(INGEST_DIR)/*
-	rm -f $(INDEX_DIR)/*.time
-	rm -f desdm-test.db
+# the Sqlite databse and associated time stamos but not
+#  the stuff from ORACLE  remove the dababase and re-stuff
+clean : clean_indicies
+	rm -f $(CREATE_DIR)/*  #create time stamps
+	rm -f $(INGEST_DIR)/*  #ingest time stamps
+	rm -f desdm-test.db    #database file 
 
 scrub: clean
 	rm -f $(SCHEMA_DIR)/*
+	rm -f $(EXPORT_DIR)/*
 
 #.schema:.csv 
 #	.ingest.py export $<  > tmp.sql
