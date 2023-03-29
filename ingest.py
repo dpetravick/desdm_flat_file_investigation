@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!//bin/env python3
 """
  small framework to assess the feasiblity of post-desdm databases.
 and if DBs are feasible to inform a selection.
@@ -49,6 +49,31 @@ def get_config(args):
    with open("ingest.toml",'r') as f :
       config = toml.load(f)
    return config
+
+def wrap(item):
+   "format a prose to fit into a column"
+   import textwrap
+   w =  textwrap.TextWrapper(subsequent_indent=" ",
+                             break_long_words = True,
+                             width = 35
+   )
+   if type(item) == type("") : item = [item]
+   stanza = "\n".join( ["\n".join(w.wrap(i)) for i in item])
+   return stanza
+
+def format_plan_item(line):
+   " crude parser to make plans more readable"
+   import shlex
+   out = []
+   for token in shlex.split(line):
+      if token == "TABLE" : token = token + "\n"
+      if token == "INDEX" : token = token + "\n"
+      if token[0] == "("  : token = "\n " + token
+      out.append(token)
+   return " ".join(out)
+      
+  
+
 
 ##############################
 #
@@ -202,18 +227,28 @@ def query(args):
 
 def test_db(args):
    "test the db by doing all the test queries"
+   import tabulate
    config = get_config(args)
    conn = sqlite3.connect(args.db)
+   table=[]
    for key in config:
       if config[key]['type'] != 'query' : continue
       print(f'{key}:{config[key]["doc"]}')
       query = config[key]["query"]
+      explain_query = "EXPLAIN QUERY PLAN " + query 
       logging.debug(f'{query}')
       cur = conn.cursor()
+      plan = cur.execute(explain_query)
+      plans = "\n".join([format_plan_item(f"{p[3]}") for p in plan])
       t0 =  time.time()
       result = cur.execute(query)
-      result  = [r for r in result]
-      print (f"{len(result)} returned in {time.time()-t0} seconds")
+      n_items  = len([r for r in result])
+      duration = time.time()-t0
+      table.append( [key, f"{duration:.2f}", n_items, wrap(query), plans] ) 
+      print (f"{n_items} returned in {time.time()-t0} seconds")
+
+   headers=["name", "sec","rows","query","plan"]
+   print(tabulate.tabulate(table, tablefmt="simple_grid",headers=headers))
       
 
 def plan(args):
@@ -273,9 +308,8 @@ def sqlplus(args):
    # process any arguments to sqlplus
    cmd_args = ""
    if args.cmd_args : cmd_args = " ".join(args.cmd_args)
-
    cmd=f'rlwrap sqlplus {user}/{passwd}@{server}/{service} {cmd_args}'
-   print (cmd)
+   logging.info(cmd)
    subprocess.run(cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr, shell=True)
 
 
@@ -290,6 +324,7 @@ if __name__ == "__main__":
                              default="INFO")
     main_parser.add_argument('--db',  default='desdm-test.db',
              help='the sqlite DB udner test')
+    main_parser.set_defaults(func=None)
         
     subparsers = main_parser.add_subparsers()   
 
@@ -297,13 +332,13 @@ if __name__ == "__main__":
     parser = subparsers.add_parser('export', help=export.__doc__)
     parser.set_defaults(func=export)
     parser.add_argument("schema_file", help = "schema file")
-    parser.add_argument("-o", "--output_dir", help = "def ./exports", default="./exports") 
+    parser.add_argument("-o", "--output_dir", help = "def ./exports", default="./d2_exports") 
 
     # create tables in sqlite2
     parser = subparsers.add_parser('create', help=create.__doc__)
     parser.set_defaults(func=create)
     parser.add_argument("schema_file", help = "schema_file")
-    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./creates") 
+    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./d3_creates") 
 
     # ingest csv into  sqlite2
     parser = subparsers.add_parser('ingest', help=ingest.__doc__)
@@ -345,8 +380,8 @@ if __name__ == "__main__":
     # make a CSV defining which columsn shod be carried forward to SQLITE
     parser = subparsers.add_parser('define', help=define.__doc__)
     parser.set_defaults(func=define)
-    parser.add_argument("import_file", help = "table ") 
-    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./schemas") 
+    parser.add_argument("import_file", help = "table") 
+    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./d2_schemas") 
 
     # test the DB
     parser = subparsers.add_parser('test_db', help=test_db.__doc__)
@@ -371,5 +406,6 @@ if __name__ == "__main__":
     if not args.func:  # there are no subfunctions
         main_parser.print_help()
         exit(1)
+
     args.func(args)
 

@@ -30,8 +30,7 @@ INDEX_TIME_FILES := $(patsubst $(IMPORT_DIR)/%.import,$(INDEX_DIR)/%.time   ,$(I
 ./$(SCHEMA_DIR)/%.schema:./$(IMPORT_DIR)/%.import 
 	echo $@ $<
 	./ingest.py define $< > temp.sql   # make schema CSV files 
-	sqlplus donaldp/don70chips2@desdb-sci.ncsa.illinois.edu/dessci @temp.sql  > /dev/null
-	rm temp.sql
+	./ingest.py sqlpus @temp.sql  > /dev/null
 
 $(CREATE_DIR)/%.create:./$(SCHEMA_DIR)/%.schema 
 	./ingest.py create $< -o $(CREATE_DIR) # make tables in SQLITE 
@@ -39,7 +38,7 @@ $(CREATE_DIR)/%.create:./$(SCHEMA_DIR)/%.schema
 $(EXPORT_DIR)/%.export:./$(SCHEMA_DIR)/%.schema 
 	./ingest.py export $< > temp.sql -o $(EXPORT_DIR)  # ORACLE DATA -> csv
 	cat temp.sql
-	sqlplus donaldp/don70chips2@desdb-sci.ncsa.illinois.edu/dessci @temp.sql > /dev/null
+	./ingest.py sqlpus @temp.sql  > /dev/null
 	rm temp.sql
 
 $(INGEST_DIR)/%.ingest:$(EXPORT_DIR)/%.export

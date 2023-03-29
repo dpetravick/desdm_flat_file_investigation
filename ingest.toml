@@ -18,6 +18,32 @@ WHERE t.tag='Y6A2_COADD'
     and c.band = 'z';
 """
 
+[find-coadds-alt]
+type="query"
+doc="How to find a set of coadd images"
+ref="https://opensource.ncsa.illinois.edu/confluence/pages/viewpage.action?spaceKey=DESDM&title=Y6A1+Release+Notes"
+query="""
+SELECT fai.path, fai.filename, fai.compression
+FROM  y6a2_coadd c, y6a2_proctag t, y6a2_file_archive_info fai 
+WHERE t.tag='Y6A2_COADD' 
+    and t.pfw_attempt_id=c.pfw_attempt_id 
+    and c.filename=fai.filename 
+    and c.band = 'z';
+"""
+[find-coadds-alt-alt]
+type="query"
+doc="How to find a set of coadd images"
+ref="https://opensource.ncsa.illinois.edu/confluence/pages/viewpage.action?spaceKey=DESDM&title=Y6A1+Release+Notes"
+query="""
+SELECT fai.path, fai.filename, fai.compression
+FROM  y6a2_coadd c,  y6a2_file_archive_info fai, y6a2_proctag t
+
+WHERE t.tag='Y6A2_COADD' 
+    and t.pfw_attempt_id=c.pfw_attempt_id 
+    and c.filename=fai.filename 
+    and c.band = 'z';
+"""
+
 [objects_in_file]
 type="query"
 doc="How to find FITS tables for  coadd objects for a single-tile:"
