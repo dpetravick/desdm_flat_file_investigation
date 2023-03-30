@@ -70,10 +70,23 @@ def format_plan_item(line):
       if token == "INDEX" : token = token + "\n"
       if token[0] == "("  : token = "\n " + token
       out.append(token)
-   return " ".join(out)
-      
-  
 
+   return " ".join(out)
+
+def format_sql(sql):
+   import sqlparse
+   return sqlparse.format(sql, reindent=True, keyword_case='upper')
+
+
+def is_analyzed(args):
+   sql = "select  * from sqlite_stat1;"
+   conn = sqlite3.connect(args.db)
+   cur = conn.cursor()
+   result = cur.execute(sql)
+   results = [r for r in result]
+   if len(results) : return True
+   return False
+   
 
 ##############################
 #
@@ -143,7 +156,7 @@ def create(args):
 def show(args):
    "print high level information about the db"
    config = get_config(args)
-   conn = sqlite3 .connect(args.db)
+   conn = sqlite3.connect(args.db)
    cur = conn.cursor()
    result = cur.execute("SELECT type, name FROM sqlite_master;").fetchall()
    info = []
@@ -231,6 +244,7 @@ def test_db(args):
    config = get_config(args)
    conn = sqlite3.connect(args.db)
    table=[]
+   db_analyzed = is_analyzed(args)
    for key in config:
       if config[key]['type'] != 'query' : continue
       print(f'{key}:{config[key]["doc"]}')
@@ -244,10 +258,10 @@ def test_db(args):
       result = cur.execute(query)
       n_items  = len([r for r in result])
       duration = time.time()-t0
-      table.append( [key, f"{duration:.2f}", n_items, wrap(query), plans] ) 
+      table.append( [key, db_analyzed, f"{duration:.2f}", n_items, format_sql(query), plans] ) 
       print (f"{n_items} returned in {time.time()-t0} seconds")
 
-   headers=["name", "sec","rows","query","plan"]
+   headers=["name", "azed", "sec","rows","query","plan"]
    print(tabulate.tabulate(table, tablefmt="simple_grid",headers=headers))
       
 
