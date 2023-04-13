@@ -4,7 +4,13 @@ EXPORT_DIR  := ./d3_exports
 CREATE_DIR  := ./d4_creates
 INGEST_DIR  := ./d5_ingests
 INDEX_DIR   := ./d6_indicies
-#
+
+DB            := desdm-test.db 
+TEST_LOG      := desdm-test-queries.log
+DIST_ROOT     := /home/donaldp/public_html/desdm-file-db-$(shell date "+%y-%m-%d-%H-%M")/
+INGEST_FLAGS  := --loglevel INFO --db ${DB}
+DIST_MD5      := ${DIST_ROOT}desdm-test.db.md5
+
 # make all the list of files needed. 
 #
 IMPORT_FILES     := $(wildcard $(IMPORT_DIR)/*.import)
@@ -15,7 +21,7 @@ SCHEMA_FILES     := $(patsubst $(IMPORT_DIR)/%.import,$(SCHEMA_DIR)/%.schema ,$(
 # create files  indicatet taht create statmensts ahev been issue to the DB
 CREATE_FILES     := $(patsubst $(IMPORT_DIR)/%.import,$(CREATE_DIR)/%.create ,$(IMPORT_FILES))
 
-# export fiels are teh data expored from oracel (intenrally CSV format)
+# export files are teh data expored from oracel (intenrally CSV format)
 EXPORT_FILES     := $(patsubst $(IMPORT_DIR)/%.import,$(EXPORT_DIR)/%.export ,$(IMPORT_FILES))
 
 # ingest files are tiemstamps indicating when an .import files was ingested into the DB
@@ -25,13 +31,13 @@ INGEST_FILES     := $(patsubst $(IMPORT_DIR)/%.import,$(INGEST_DIR)/%.ingest ,$(
 INDEX_DEF_FILES  := $(patsubst $(IMPORT_DIR)/%.import,$(INDEX_DIR)/%.def   ,$(IMPORT_FILES))
 INDEX_TIME_FILES := $(patsubst $(IMPORT_DIR)/%.import,$(INDEX_DIR)/%.time   ,$(IMPORT_FILES))
 
+
 # from a file naming a table to import to ..
 # a CSV alloing us to say what columns to import
 ./$(SCHEMA_DIR)/%.schema:./$(IMPORT_DIR)/%.import 
 	echo $@ $<
 	./ingest.py define $< > temp.sql   # make schema CSV files 
 	./ingest.py sqlpus @temp.sql  > /dev/null
-
 $(CREATE_DIR)/%.create:./$(SCHEMA_DIR)/%.schema 
 	./ingest.py create $< -o $(CREATE_DIR) # make tables in SQLITE 
 
@@ -69,17 +75,27 @@ exported : $(EXPORT_FILES)
 
 ingests : $(INGEST_FILES)
 
-#
+############
 #  tests 
-#
-test: 
-	./ingest.py test_db
+############
+test :
+	./ingest.py  ${INGEST_FLAGS} test_db | tee ${TEST_LOG}
 
+############
+#  copy to web area
+############
+publish :
+	mkdir -p          ${DIST_ROOT}
+	cp desdm-test.db  ${DIST_ROOT}
+	md5sum dog | cut -f 1 -d' ' > ${DIST_MD5}
+	cp ${TEST_LOG}    ${DIST_ROOT}
+	cp ingest.toml    ${DIST_ROOT}
+	ls  ${DIST_ROOT}
 
-#
-#  Cleaning
-#
-#
+#############
+# Cleaning
+#############
+
 
 # all timestamps in the index dir
 clean_indicies:
@@ -91,21 +107,12 @@ clean : clean_indicies
 	rm -f $(CREATE_DIR)/*  #create time stamps
 	rm -f $(INGEST_DIR)/*  #ingest time stamps
 	rm -f desdm-test.db    #database file 
+	rm ${TEST_LOG}
 
 scrub: clean
 	rm -f $(SCHEMA_DIR)/*
 	rm -f $(EXPORT_DIR)/*
 
-#.schema:.csv 
-#	.ingest.py export $<  > tmp.sql
-#	dessci @temp.sql
-#	rm temp.sql
-#
-#.csv:.dbtim:
-#	./ingest.py  ingest  $< > tmp.sql
-#	dessci @temp.sql
-#	rm temp.sql
-#
 
 
 
