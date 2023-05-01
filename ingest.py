@@ -86,7 +86,19 @@ def is_analyzed(args):
    results = [r for r in result]
    if len(results) : return True
    return False
-   
+
+def make_temp_support_tables(conn, config):
+   "temp tables last as long as the connection"
+   #import pdb; pdb.set_trace()
+   for c in config: 
+      if config[c]["type"] != "temp support" : continue
+      logging.info(f"about to make temp support table {c} and its index")
+      sql = config[c]["query"]
+      cur = conn.cursor()
+      result = cur.execute(sql)
+      sql = config[c]["index_query"]
+      logging.info(f"{c} table and index built")
+   return 
 
 ##############################
 #
@@ -181,7 +193,8 @@ def ingest(args):
                          '-cmd',
                          '.mode csv',
                          '.import  --skip 2 ' + str(args.csv)
-                                 + f' {table}'])
+                                 + f' {table}' ,
+                            f'ANALYZE {table};'])
 
 def deindex(args):
    "drop all indexes"
@@ -228,13 +241,14 @@ def index(args):
 
 def query(args):
    "perform an example query specified in the toml file"
-   config = get_config(args)[args.query]
-   doc = config["doc"]
-   query = config["query"]
+   config = get_config(args)
+   doc = config[args.query]["doc"]
+   query = config[args.query]["query"]
    print (doc)
    print (query)
    conn = sqlite3.connect(args.db)
    cur = conn.cursor()
+   make_temp_support_tables(conn, config)
    result = cur.execute(query)
    for r in result: print(r)
 
@@ -243,6 +257,7 @@ def test_db(args):
    import tabulate
    config = get_config(args)
    conn = sqlite3.connect(args.db)
+   make_temp_support_tables(conn, config)
    table=[]
    db_analyzed = is_analyzed(args)
    for key in config:
@@ -267,12 +282,13 @@ def test_db(args):
 
 def plan(args):
    "perform an explain of a query"
-   config = get_config(args)[args.query]
-   doc = config["doc"]
-   query = config["query"]
+   config = get_config(args)
+   doc = config[args.query]["doc"]
+   query = config[args.query]["query"]
    query = "EXPLAIN QUERY PLAN " + query
    print (query)
    conn = sqlite3.connect(args.db)
+   make_temp_support_tables(conn, config)
    cur = conn.cursor()
    result = cur.execute(query)
    for r in result: print(r)

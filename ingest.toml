@@ -1,3 +1,23 @@
+#########################
+#
+# tempporay table suppport.
+# some queries are designed to work with temporary 
+# tables specifying the files of interest.
+#
+#########################
+[random-images]
+type = "temp support"
+query = """
+CREATE temp TABLE gtt_filename AS 
+  SELECT filename 
+  FROM   y6a2_image 
+  ORDER  BY RANDOM() limit 3000; 
+"""
+index_query = """
+CREATE INDEX gtt_filename__filename_idx 
+   ON gtt_filename (filename);
+"""
+
 
 ##########################
 #
@@ -5,8 +25,9 @@
 # 
 #########################
 
-[robert-1]
-type = "query"
+[robert1]
+type = "draft_query"
+issue = "need Y6DEEP_IMAGE_TO_TILE table"
 doc = "Images Acquired by Pre-computed relationship between Images and Tile for tile=SN-X1_C16"
 oracle_time = 0.29
 query = """
@@ -24,9 +45,9 @@ SELECT fai.filename AS filename,
        i.decc2 AS decc2,
        i.decc3 AS decc3,
        i.decc4 AS decc4
-FROM image i,
-     file_archive_info fai,
-     proctag t,
+FROM y6a2_image i,
+     y6a2_file_archive_info fai,
+     y6a2_proctag t,
      Y6DEEP_IMAGE_TO_TILE y
 WHERE t.tag='Y6DEEP_X1_CT_INPUT'
   AND t.pfw_attempt_id=i.pfw_attempt_id
@@ -40,7 +61,7 @@ WHERE t.tag='Y6DEEP_X1_CT_INPUT'
 
 
 
-[Robert-2]
+[robert2]
 type = "query" 
 doc = "Executing query to obtain ZEROPOINTs corresponding to the red_immasked images"
 oracle_time = 2.13 
@@ -49,9 +70,9 @@ SELECT gtt.filename AS filename,
        z.mag_zero AS mag_zero,
        i.expnum AS expnum,
        i.ccdnum AS ccdnum
-FROM image i,
+FROM y6a2_image i,
      gtt_filename gtt,
-          zeropoint z
+     y6a2_zeropoint z
 WHERE i.filename=gtt.filename
   AND z.imagename=i.filename
   AND z.mag_zero>-100.
@@ -59,11 +80,30 @@ WHERE i.filename=gtt.filename
   AND z.version='y6a1_v2.1'
   AND z.flag<16
 """
+[robert2a]
+type = "draft query" 
+doc = "Executing query to obtain ZEROPOINTs corresponding to the red_immasked images"
+oracle_time = 2.13 
+query = """
+SELECT i.filename AS filename,
+       z.mag_zero AS mag_zero,
+       i.expnum AS expnum,
+       i.ccdnum AS ccdnum
+FROM y6a2_image i,
+     y6a2_zeropoint z
+WHERE 
+  z.imagename=i.filename
+  AND z.mag_zero>-100.
+  AND z.source='FGCM'
+  AND z.version='y6a1_v2.1'
+  AND z.flag<16
+"""
 
-[Robert-3]
-type="query"
+[robert3]
+type="draft query"
 doc = "Executing query to obtain SECONDARY ZPTs corresponding to the red_immasked images"
 oracle_time = 2.13
+isuse = "needs gtt query"
 query = """
 SELECT gtt.filename AS filename,
        z.mag_zero AS mag_zero,
@@ -71,7 +111,7 @@ SELECT gtt.filename AS filename,
        i.ccdnum AS ccdnum
 FROM image i,
      gtt.filename gtt,
-          zeropoint z
+     y6a2_zeropoint z
 WHERE i.filename=gtt.filename
   AND z.imagename=i.filename
   AND z.mag_zero>-100.
@@ -80,15 +120,16 @@ WHERE i.filename=gtt.filename
   AND z.flag<16
 """
 
-[Robert-4]
-type = "query"
+[robert4]
+type = "draft query"
 doc = "query to remove blacklisted images"
 oracle_time = 2.18
+issue = "needs gtt_filename table"
 query = """
 SELECT gtt.filename AS filename,
        i.expnum AS expnum,
        i.ccdnum AS ccdnum
-FROM image i,
+FROM y6a2_image i,
      gtt_filename gtt
 WHERE i.filename=gtt.filename
   AND NOT EXISTS
@@ -98,10 +139,11 @@ WHERE i.filename=gtt.filename
        AND bl.ccdnum=i.ccdnum)
 """
 
-[Robert-5]
-type = "query"
+[robert5]
+type = "draft query"
 doc = "Executing query to obtain red_bkg images corresponding to the red_immasked images" 
 oracle_time = 2.61
+issue = "needs GTT_FILENME table"
 query = """
 SELECT i.filename AS redfile,
        fai.filename AS filename,
@@ -110,9 +152,9 @@ SELECT i.filename AS redfile,
        k.band  AS band,
        k.expnum AS expnum,
        k.ccdnum AS ccdnum
-FROM image i,
-     image k,
-     file_archive_info fai,
+FROM y6a2_image i,
+     y6a2_image k,
+     y6a2_file_archive_info fai,
      GTT_FILENAME gtt
 WHERE i.filename=gtt.filename
   AND i.pfw_attempt_id=k.pfw_attempt_id
@@ -122,21 +164,22 @@ WHERE i.filename=gtt.filename
   AND fai.archive_name='desar2home'
 """
 
-[Robert-6] 
-type = "query"
+[robert6] 
+type = "draft query"
 oracle_time = -1
 doc = "obtain segmentation map images corresponding to the red_immasked images"
+issue = "needs GTT_FILENAME  table "
 query = """
 SELECT i.filename AS redfile,
-fai.filename AS filename,
-fai.path AS PATH,
-fai.compression AS compression,
-m.band  AS band,
-m.expnum AS expnum,
-m.ccdnum AS ccdnum
-FROM image i,
-     miscfile m,
-     file_archive_info fai,
+       fai.filename AS filename,
+       fai.path AS PATH,
+       fai.compression AS compression,
+       m.band  AS band,
+       m.expnum AS expnum,
+       m.ccdnum AS ccdnum
+FROM y6a2_image i,
+     y6a2_miscfile m,
+     y6a2_file_archive_info fai,
      GTT_FILENAME gtt
 WHERE i.filename=gtt.filename
   AND i.pfw_attempt_id=m.pfw_attempt_id
@@ -146,11 +189,12 @@ WHERE i.filename=gtt.filename
   AND fai.archive_name='desar2home'
 """
 
-[Robert-6]
-type = "query"
+[robert7]
+type = "draft query"
 oracle_time = 3.04
 doc = "obtain segmentation map images corresponding to the red_immasked images"
 query  = """
+issue = "need GTT_FILENAME table"
 SELECT i.filename AS redfile,
        fai.filename AS filename,
        fai.path AS PATH,
@@ -158,9 +202,9 @@ SELECT i.filename AS redfile,
        m.band AS band,
        m.expnum AS expnum,
        m.ccdnum AS ccdnum
-FROM image i,
-     miscfile m,
-     file_archive_info fai,
+FROM y6a2_image i,
+     y6a2_miscfile m,
+     y6a2_file_archive_info fai,
      GTT_FILENAME gtt
 WHERE i.filename=gtt.filename
   AND i.pfw_attempt_id=m.pfw_attempt_id
@@ -170,9 +214,10 @@ WHERE i.filename=gtt.filename
   AND fai.archive_name='desar2home'
 """
 
-[Robert-7]
-type="query"
+[robert8]
+type="draft query"
 doc = "obtain PSFex models corresponding to the red_immasked images"
+issue = "need GTT_FILENAME table"
 query = """
 SELECT i.filename AS redfile,
        fai.filename AS filename,
@@ -181,9 +226,9 @@ SELECT i.filename AS redfile,
        m.band AS band,
        m.expnum AS expnum,
        m.ccdnum AS ccdnum
-FROM image i,
-     miscfile m,
-     file_archive_info fai,
+FROM y6a2_image i,
+     y6a2_miscfile m,
+     y6a2_file_archive_info fai,
      GTT_FILENAME gtt
 WHERE i.filename=gtt.filename
   AND i.pfw_attempt_id=m.pfw_attempt_id
@@ -193,9 +238,10 @@ WHERE i.filename=gtt.filename
   AND fai.archive_name='desar2home'
 """
 
-[Robert-8]
-type = "query"
+[robert9]
+type = "draft query"
 doc = ""
+issue = "needs a GTT_FILENAME table"
 query = """
 SELECT i.filename AS redfile,
        fai.filename AS filename,
@@ -204,9 +250,9 @@ SELECT i.filename AS redfile,
        m.band  AS band,
        m.expnum AS expnum,
        m.ccdnum AS ccdnum
-FROM image i,
-     miscfile m,
-     file_archive_info fai,
+FROM y6a2_image i,
+     y6a2_miscfile m,
+     y6a2_file_archive_info fai,
      GTT_FILENAME gtt
 WHERE i.filename=gtt.filename
   AND i.pfw_attempt_id=m.pfw_attempt_id
