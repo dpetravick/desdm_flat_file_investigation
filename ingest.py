@@ -97,6 +97,7 @@ def make_temp_support_tables(conn, config):
       cur = conn.cursor()
       result = cur.execute(sql)
       sql = config[c]["index_query"]
+      result = cur.execute(sql)
       logging.info(f"{c} table and index built")
    return 
 

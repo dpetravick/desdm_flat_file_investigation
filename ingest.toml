@@ -31,6 +31,7 @@ issue = "need Y6DEEP_IMAGE_TO_TILE table"
 doc = "Images Acquired by Pre-computed relationship between Images and Tile for tile=SN-X1_C16"
 oracle_time = 0.29
 query = """
+issue = " Y6DEEP_IMAGE_TO_TILE not ingested
 SELECT fai.filename AS filename,
        fai.path AS PATH,
        fai.compression AS compression,
@@ -58,9 +59,6 @@ WHERE t.tag='Y6DEEP_X1_CT_INPUT'
   AND y.tilename='SN-X1_C16'
 """
 
-
-
-
 [robert2]
 type = "query" 
 doc = "Executing query to obtain ZEROPOINTs corresponding to the red_immasked images"
@@ -80,37 +78,19 @@ WHERE i.filename=gtt.filename
   AND z.version='y6a1_v2.1'
   AND z.flag<16
 """
-[robert2a]
-type = "draft query" 
-doc = "Executing query to obtain ZEROPOINTs corresponding to the red_immasked images"
-oracle_time = 2.13 
-query = """
-SELECT i.filename AS filename,
-       z.mag_zero AS mag_zero,
-       i.expnum AS expnum,
-       i.ccdnum AS ccdnum
-FROM y6a2_image i,
-     y6a2_zeropoint z
-WHERE 
-  z.imagename=i.filename
-  AND z.mag_zero>-100.
-  AND z.source='FGCM'
-  AND z.version='y6a1_v2.1'
-  AND z.flag<16
-"""
 
 [robert3]
-type="draft query"
+type="query"
 doc = "Executing query to obtain SECONDARY ZPTs corresponding to the red_immasked images"
 oracle_time = 2.13
-isuse = "needs gtt query"
+isuse = ""
 query = """
 SELECT gtt.filename AS filename,
        z.mag_zero AS mag_zero,
        i.expnum AS expnum,
        i.ccdnum AS ccdnum
-FROM image i,
-     gtt.filename gtt,
+FROM y6a2_image i,
+     gtt_filename gtt,
      y6a2_zeropoint z
 WHERE i.filename=gtt.filename
   AND z.imagename=i.filename
@@ -124,7 +104,7 @@ WHERE i.filename=gtt.filename
 type = "draft query"
 doc = "query to remove blacklisted images"
 oracle_time = 2.18
-issue = "needs gtt_filename table"
+issue = "needs Y6A1_EXCLUDE_LIST"
 query = """
 SELECT gtt.filename AS filename,
        i.expnum AS expnum,
@@ -140,10 +120,11 @@ WHERE i.filename=gtt.filename
 """
 
 [robert5]
-type = "draft query"
+type = "query"
 doc = "Executing query to obtain red_bkg images corresponding to the red_immasked images" 
 oracle_time = 2.61
-issue = "needs GTT_FILENME table"
+issue = ""
+edits = "removed   AND fai.archive_name='desar2home', added AND i.filename = k.filename"
 query = """
 SELECT i.filename AS redfile,
        fai.filename AS filename,
@@ -157,18 +138,19 @@ FROM y6a2_image i,
      y6a2_file_archive_info fai,
      GTT_FILENAME gtt
 WHERE i.filename=gtt.filename
+  AND i.filename=k.filename
+  AND k.filename=fai.filename
   AND i.pfw_attempt_id=k.pfw_attempt_id
   AND k.filetype='red_bkg'
   AND i.ccdnum=k.ccdnum
-  AND k.filename=fai.filename
-  AND fai.archive_name='desar2home'
 """
 
 [robert6] 
-type = "draft query"
+type = "query"
 oracle_time = -1
 doc = "obtain segmentation map images corresponding to the red_immasked images"
-issue = "needs GTT_FILENAME  table "
+issue = ""
+edits = "removed   AND fai.archive_name='desar2home'  moved   AND m.filename=fai.filename up"
 query = """
 SELECT i.filename AS redfile,
        fai.filename AS filename,
@@ -182,19 +164,20 @@ FROM y6a2_image i,
      y6a2_file_archive_info fai,
      GTT_FILENAME gtt
 WHERE i.filename=gtt.filename
+  AND m.filename=fai.filename
   AND i.pfw_attempt_id=m.pfw_attempt_id
   AND m.filetype='red_segmap'
   AND i.ccdnum=m.ccdnum
-  AND m.filename=fai.filename
-  AND fai.archive_name='desar2home'
+
 """
 
 [robert7]
-type = "draft query"
+type = "query"
 oracle_time = 3.04
 doc = "obtain segmentation map images corresponding to the red_immasked images"
+edits = "removed   AND fai.archive_name='desar2home' moved   AND m.filename=fai.filename up"
+issue = ""
 query  = """
-issue = "need GTT_FILENAME table"
 SELECT i.filename AS redfile,
        fai.filename AS filename,
        fai.path AS PATH,
@@ -207,17 +190,17 @@ FROM y6a2_image i,
      y6a2_file_archive_info fai,
      GTT_FILENAME gtt
 WHERE i.filename=gtt.filename
+  AND m.filename=fai.filename
   AND i.pfw_attempt_id=m.pfw_attempt_id
   AND m.filetype='red_segmap'
   AND i.ccdnum=m.ccdnum
-  AND m.filename=fai.filename
-  AND fai.archive_name='desar2home'
 """
 
 [robert8]
-type="draft query"
+type="query"
 doc = "obtain PSFex models corresponding to the red_immasked images"
-issue = "need GTT_FILENAME table"
+issue = ""
+edits = "removed   AND fai.archive_name='desar2home' moved   AND m.filename=fai.filename up"
 query = """
 SELECT i.filename AS redfile,
        fai.filename AS filename,
@@ -231,17 +214,17 @@ FROM y6a2_image i,
      y6a2_file_archive_info fai,
      GTT_FILENAME gtt
 WHERE i.filename=gtt.filename
+  AND m.filename=fai.filename
   AND i.pfw_attempt_id=m.pfw_attempt_id
   AND m.filetype='psfex_model'
   AND i.ccdnum=m.ccdnum
-  AND m.filename=fai.filename
-  AND fai.archive_name='desar2home'
 """
 
 [robert9]
-type = "draft query"
+type = "query"
 doc = ""
-issue = "needs a GTT_FILENAME table"
+issue = ""
+edits = """removed   AND fai.archive_name='desar2home' moved   AND m.filename=fai.filename up"""
 query = """
 SELECT i.filename AS redfile,
        fai.filename AS filename,
@@ -255,11 +238,10 @@ FROM y6a2_image i,
      y6a2_file_archive_info fai,
      GTT_FILENAME gtt
 WHERE i.filename=gtt.filename
+  AND m.filename=fai.filename
   AND i.pfw_attempt_id=m.pfw_attempt_id
   AND m.filetype='psfex_model'
   AND i.ccdnum=m.ccdnum
-  AND m.filename=fai.filename
-  AND fai.archive_name='desar2home'
 """
 
 [find-coadds]
