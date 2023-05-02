@@ -79,6 +79,12 @@ def format_sql(sql):
 
 
 def is_analyzed(args):
+   """
+   Assess if all indicies  have all been Analyzed
+
+   Right now, this is a test for a non empty table
+   tha tholds assessments.  
+   """
    sql = "select  * from sqlite_stat1;"
    conn = sqlite3.connect(args.db)
    cur = conn.cursor()
@@ -171,18 +177,31 @@ def show(args):
    config = get_config(args)
    conn = sqlite3.connect(args.db)
    cur = conn.cursor()
+   cur2 = conn.cursor()
    result = cur.execute("SELECT type, name FROM sqlite_master;").fetchall()
    info = []
    for ttype, table in result:
       if ttype == "table":
+         # for tables the stat is nrow.
          sql = f"select max(RowId) from {table} ;"
          nrow = cur.execute(sql).fetchall()[0][0]
-         info.append((ttype, table, nrow))
+         stats = nrow
       else:
-         info.append((ttype, table, ""))
-   report  = tabulate.tabulate(info, headers=["type", "name", "nrow"])
+         # for indexed the stat is the rsoling power of the index.
+         # this is available if the corresplding table was analyzed.
+         # else print if there is is no analysis 
+         # import pdb; pdb.set_trace()
+         sql2 = f"SELECT stat from sqlite_stat1 where idx = '{table}';"
+         result = cur2.execute(sql2).fetchone()
+         if result :
+            stats = result[0]
+         else:
+            stats = "not analyzed"
+      info.append((ttype, table, stats))
+   report  = tabulate.tabulate(info, 
+                               headers=["type", "name", "stats"],
+                               tablefmt="simple_grid")
    print (report)
-
 
 def ingest(args):
    "ingest a csv into sqlite"
@@ -239,6 +258,12 @@ def index(args):
       sql = f"CREATE INDEX IF NOT EXISTS {indexname} ON {table_name} ({indexed_columns}) ;"
       print (sql)
       conn.execute(sql)
+
+   # re-analyse the table and all of its indices.
+      logging.info(f"Indicies for {table_name} finished buiding analysis") 
+      sql = f"ANALYZE {table_name} ;"
+      conn.execute(sql)
+      logging.info(f"Analsys for {table_name} finished") 
 
 def query(args):
    "perform an example query specified in the toml file"
