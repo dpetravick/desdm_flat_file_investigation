@@ -1,3 +1,8 @@
 pfw_attempt_id,filename
 tilename
 filename
+# adding filetype as i does inform the 
+# the query optimizied to not compute an 
+# automatic covering index for this low carindaltiy 
+# item  
+filetype 

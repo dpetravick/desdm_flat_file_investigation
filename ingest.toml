@@ -11,7 +11,8 @@ query = """
 CREATE temp TABLE gtt_filename AS 
   SELECT filename 
   FROM   y6a2_image 
-  ORDER  BY RANDOM() limit 3000; 
+  WHERE  filetype = 'red_immask' 
+  ORDER  BY RANDOM() limit 300; 
 """
 index_query = """
 CREATE INDEX gtt_filename__filename_idx 

@@ -260,10 +260,10 @@ def index(args):
       conn.execute(sql)
 
    # re-analyse the table and all of its indices.
-      logging.info(f"Indicies for {table_name} finished buiding analysis") 
-      sql = f"ANALYZE {table_name} ;"
-      conn.execute(sql)
-      logging.info(f"Analsys for {table_name} finished") 
+   logging.info(f"Indicies for {table_name} finished buiding analysis") 
+   sql = f"ANALYZE {table_name} ;"
+   conn.execute(sql)
+   logging.info(f"Analsys for {table_name} finished") 
 
 def query(args):
    "perform an example query specified in the toml file"
@@ -297,6 +297,7 @@ def test_db(args):
       plans = "\n".join([format_plan_item(f"{p[3]}") for p in plan])
       t0 =  time.time()
       result = cur.execute(query)
+      pass
       n_items  = len([r for r in result])
       duration = time.time()-t0
       table.append( [key, db_analyzed, f"{duration:.2f}", n_items, format_sql(query), plans] ) 

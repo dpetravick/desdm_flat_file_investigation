@@ -6,7 +6,9 @@ INGEST_DIR  := ./d5_ingests
 INDEX_DIR   := ./d6_indicies
 
 DB            := desdm-test.db 
+ANALYSIS_LOG  := desdm-test.analysis.log
 TEST_LOG      := desdm-test-queries.log
+SHOW_LOG      := desdm-test-tables.log
 DIST_ROOT     := /home/donaldp/public_html/desdm-file-db-$(shell date "+%y-%m-%d-%H-%M")/
 INGEST_FLAGS  := --loglevel INFO --db ${DB}
 DIST_MD5      := ${DIST_ROOT}desdm-test.db.md5
@@ -81,6 +83,11 @@ ingests : $(INGEST_FILES)
 test :
 	./ingest.py  ${INGEST_FLAGS} test_db | tee ${TEST_LOG}
 
+analysis: ${ANALYSIS_LOG} 
+
+${ANALYSIS_LOG} : ${DB}
+	sqlite3_analyzer ${DB} > ${ANALYSIS_LOG}
+
 ############
 #  copy to web area
 ############
@@ -90,6 +97,7 @@ publish :
 	md5sum dog | cut -f 1 -d' ' > ${DIST_MD5}
 	cp ${TEST_LOG}    ${DIST_ROOT}
 	cp ingest.toml    ${DIST_ROOT}
+        ./ingest.py show > ${SHOW_LOG}
 	ls  ${DIST_ROOT}
 
 #############
