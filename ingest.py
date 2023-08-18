@@ -369,6 +369,30 @@ def sqlplus(args):
    logging.info(cmd)
    subprocess.run(cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr, shell=True)
 
+def compress(args):
+   """
+   Compress the database using zstandard compresssion
+
+   note that the standard fie extention for zstandard is .zst
+   """
+   import zstandard as zstd
+   import os
+   t0 = time.time()
+   z = zstd.ZstdCompressor(level=args.compression_level)
+   with open(args.infile, "rb") as fin:
+      with open(f"{args.outfile}","wb") as fout:
+         compressor = z.stream_writer(fout)
+         while True:
+            buff = fin.read(args.read_size)
+            if not buff: break 
+            compressor.write(buff)
+            print (".", end="", flush=True)
+         compressor.flush()
+   infile_gb  = os.stat(args.infile).st_size/1000*1000*1000
+   outfile_gb = os.stat(args.outfile).st_size/1000*1000*1000
+   compression_ratio = outfile_gb/infile_gb
+   print (f"\n {args.outfile} in {time.time()-t0:2f} seconds, compression ratio : {compression_ratio:.2f}")
+
 
 if __name__ == "__main__":
 
@@ -444,7 +468,7 @@ if __name__ == "__main__":
     parser = subparsers.add_parser('test_db', help=test_db.__doc__)
     parser.set_defaults(func=test_db)
 
-    # test the DB
+    # drop indicies
     parser = subparsers.add_parser('deindex', help=deindex.__doc__)
     parser.set_defaults(func=deindex)
 
@@ -454,6 +478,13 @@ if __name__ == "__main__":
     parser.add_argument("-s", "--service", help = "which service", default="dessci") 
     parser.add_argument("cmd_args", help = "any args to sqlplus", nargs='*')
 
+    # compress
+    parser = subparsers.add_parser('compress', help=compress.__doc__)
+    parser.set_defaults(func=compress)
+    parser.add_argument("infile", help = "input file name" ) 
+    parser.add_argument("outfile", help = "output file name")
+    parser.add_argument("-c", "--compression_level", help = "compression level (def 4)", default=4)
+    parser.add_argument("-r", "--read_size", help = "read input file i  chunks of. (def 100 * 1000 * 100)", default = 100 * 1000 * 1000)
 
     args = main_parser.parse_args()
     loglevel=logging.__dict__[args.loglevel]
