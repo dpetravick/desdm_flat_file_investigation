@@ -93,11 +93,11 @@ ${ANALYSIS_LOG} : ${DB}
 ############
 publish :
 	mkdir -p          ${DIST_ROOT}
-	cp desdm-test.db  ${DIST_ROOT}
+	./ingest.py compress desdm-test.db  ${DIST_ROOT}desdm-test.db.zst
 	md5sum dog | cut -f 1 -d' ' > ${DIST_MD5}
 	cp ${TEST_LOG}    ${DIST_ROOT}
 	cp ingest.toml    ${DIST_ROOT}
-        ./ingest.py show > ${SHOW_LOG}
+	./ingest.py show > ${SHOW_LOG}
 	ls  ${DIST_ROOT}
 
 #############
