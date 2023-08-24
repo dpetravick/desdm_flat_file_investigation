@@ -209,7 +209,7 @@ def ingest(args):
    table = os.path.splitext(os.path.basename(args.csv))[0]
    db_name = args.db
    result = subprocess.run(['sqlite3',
-                         str(db_name),
+        ]                 str(db_name),
                          '-cmd',
                          '.mode csv',
                          '.import  --skip 2 ' + str(args.csv)
@@ -413,13 +413,13 @@ if __name__ == "__main__":
     parser = subparsers.add_parser('export', help=export.__doc__)
     parser.set_defaults(func=export)
     parser.add_argument("schema_file", help = "schema file")
-    parser.add_argument("-o", "--output_dir", help = "def ./exports", default="./d2_exports") 
+    parser.add_argument("-o", "--output_dir", help = "def ./d2_exports", default="./d2_exports") 
 
     # create tables in sqlite2
     parser = subparsers.add_parser('create', help=create.__doc__)
     parser.set_defaults(func=create)
     parser.add_argument("schema_file", help = "schema_file")
-    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./d3_creates") 
+    parser.add_argument("-o", "--output_dir", help = "def ./d3_schemas", default="./d3_creates") 
 
     # ingest csv into  sqlite2
     parser = subparsers.add_parser('ingest', help=ingest.__doc__)
@@ -462,7 +462,7 @@ if __name__ == "__main__":
     parser = subparsers.add_parser('define', help=define.__doc__)
     parser.set_defaults(func=define)
     parser.add_argument("import_file", help = "table") 
-    parser.add_argument("-o", "--output_dir", help = "def ./schemas", default="./d2_schemas") 
+    parser.add_argument("-o", "--output_dir", help = "def ./d2_schemas", default="./d2_schemas") 
 
     # test the DB
     parser = subparsers.add_parser('test_db', help=test_db.__doc__)
