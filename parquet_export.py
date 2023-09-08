@@ -17,49 +17,98 @@ import logging
 import time
 import hashlib
 import math
+import datetime
 
-    
-def plan_fetch_max(args, conn):
-    """"
-    return the maximun number of rows for each parquet file.
-
-    Idea -- while users can grab the columns they need and 
-    minimize memory in other ways, We cannot. we need 
-    memory to hold the fetch and the transpose of fetch.
-    Chhose a number of rows that will fit into memory 
+class Monitor:
+    """ 
+    acquire and hold misc information to guide, report
+    and summarize teh parquet-ification of a table 
     """
-    cur = conn.cursor()
-    breakpoint()
-    sql = f"""
-    SELECT  
-         avg_row_len, num_rows
-    FROM 
-         dba_tables 
-    WHERE 
-          table_name = '{args.table}' """
-    df = psql.read_sql(sql, con=conn)
-    logging.info(f"{df}")
-    if len(df) != 1 : 
-        logging.fatal("errror query for {args.table} did not return one row")
-        exit(1)
 
-    bytes_per_row = df["AVG_ROW_LEN"][0]
-    mem_max = args.mem_max_bytes
-    fetch_max = int(mem_max / bytes_per_row)
-    num_files =   math.ceil(df["NUM_ROWS"][0]/fetch_max)
-    logging.info(f"table, bytes/row: {args.table}, {bytes_per_row}")
-    logging.info(f"table, rows fetched/file: {args.table}, {fetch_max}")
-    logging.info(f"table, num_files: {args.table}, {num_files}")
-       
-    return fetch_max 
+    def __init__(self, args, conn):
+        self.args = args
+        self.conn = conn
+        self.get_column_info()
+        self.get_table_info()
+        self.files = []
+        self.begin = self._now()
+    
+    def _now(self):
+        now =datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return now 
+    
+    def get_table_info(self):
+        """"
+        compute quantities relevnt to size of parquet files, 
 
+        Idea -- while users can grab the columns they need and 
+        minimize memory in other ways, We cannot. we need 
+        memory to hold the fetch and the transpose of fetch.
+        Chose a number of rows that will fit into memory 
+    """
+        cur = self.conn.cursor()
+        sql = f"""
+        SELECT  
+             avg_row_len, num_rows
+        FROM 
+            dba_tables 
+        WHERE 
+              table_name = '{self.args.table}' """
+        self.table_info_df = psql.read_sql(sql, con=self.conn)
+        logging.info(f"table info\n{self.table_info_df}")
+        if len(self.table_info_df) != 1 : 
+            logging.fatal("errror query for {args.table} did not return one row")
+            exit(1)
+
+        self.bytes_per_row = self.table_info_df["AVG_ROW_LEN"][0]
+        self.mem_max = self.args.mem_max_bytes
+        self.fetch_max = int(self.mem_max / self.bytes_per_row)
+        self.num_files =   math.ceil(self.table_info_df["NUM_ROWS"][0]/self.fetch_max)
+        logging.info(f"table, bytes/row: {self.args.table}, {self.bytes_per_row}")
+        logging.info(f"table, rows fetched/file: {self.args.table}, {self.fetch_max}")
+        logging.info(f"table, num_files: {self.args.table}, {self.num_files}")
+
+    def get_column_info(self):
+        cur = self.conn.cursor()
+        sql = f"""
+            SELECT 
+                column_name,  num_distinct, data_type, data_length, data_precision
+            FROM  
+             all_tab_columns
+            WHERE 
+                table_name  =  '{self.args.table}'
+            ORDER BY 
+                num_distinct
+        """
+        self.column_info_df = psql.read_sql(sql, con=self.conn)
+        logging.info(f"column info\n {self.column_info_df}")
+        self.column_names = self.column_info_df['COLUMN_NAME'].tolist()      
+    
+    def mk_final_report(self):
+        file_name =  os.path.join(self.args.output_root, self.args.table, f"{self.args.table}.report")
+        logging.info(f"writing report to {file_name}")
+        with open(file_name, "w") as filew:
+            text = f"""
+Parquet file production report for table {self.args.table}
+run start/stop : {self.begin},{self._now()} 
+Expected number of files {self.num_files}
+Expected rows per file   {self.fetch_max}
+Table info\n{self.table_info_df}ß
+Parquet File info\n{pd.DataFrame(self.files, columns=["file name", "file size"])}
+            """
+            filew.write(text)
+    def record_file(self, file_name):
+        file_size = os.stat(file_name).st_size
+        file_name= os.path.basename(file_name)
+        self.files.append([file_name, f"{file_size:,d}"] )
+    
 def mk_md5(filename):
     "make md5 file correspoding to file named by filename"
 
     with open(filename,"rb") as filer:
         value = hashlib.md5(filer.read())
         hexvalue = value.hexdigest()
-    with open(filename + ".md5") as filew:
+    with open(filename + ".md5","w") as filew:
         filew.write(f"{hexvalue}\n")
 
 def ora_connect(args):
@@ -95,20 +144,9 @@ def mk_parquet(args):
     """
     conn = ora_connect(args)
     cur = conn.cursor()
-    sql = f"""
-         SELECT 
-           column_name,  num_distinct, data_type, data_length, data_precision
-         FROM  
-           all_tab_columns
-         WHERE 
-           table_name  =  '{args.table}'
-         ORDER BY 
-           num_distinct
-     """
-    df = psql.read_sql(sql, con=conn)
-    logging.info(f"{df}")
-    column_names = df['COLUMN_NAME'].tolist()
-    max_rows  = plan_fetch_max(args, conn)
+    monitor = Monitor(args, conn)
+    column_names = monitor.column_names
+    max_rows  = monitor.fetch_max
     sql = f"select {','.join(column_names)} from {args.table}"
     logging.info(sql)
     rows = cur.execute(sql)
@@ -116,14 +154,18 @@ def mk_parquet(args):
         t0 = time.time()
         batch = cur.fetchmany(max_rows)
         df =  pd.DataFrame(batch, columns=column_names)
-        if not len(df) : exit()
+        if not len(df) : break
         dir_name = os.path.join(args.output_root, args.table)
         os.system (f"mkdir -p {dir_name}")
         file_name = os.path.join(dir_name, f"{args.table}_{file_number:04}.parquet")
         logging.info(f"beginning build of {file_name} ({max_rows} rows)")
         df.to_parquet(file_name, engine='pyarrow',compression='snappy')
-        logging.info(f"end of build of {file_name} -- {(time.time()-t0):0.2f} seconds")
-
+        mk_md5(file_name)
+        file_size = os.stat(file_name).st_size
+        logging.info(f"end of build of {file_name} {file_size:,d} bytes -- {(time.time()-t0):0.2f} seconds ")
+        monitor.record_file(file_name)
+    logging.info(f"{args.table} processing finished")
+    monitor.mk_final_report()
 if __name__ == "__main__" :
 
     main_parser = argparse.ArgumentParser(
