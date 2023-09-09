@@ -32,6 +32,7 @@ class Monitor:
         self.get_table_info()
         self.files = []
         self.begin = self._now()
+        self.df_schema = None
     
     def _now(self):
         now =datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -90,10 +91,14 @@ class Monitor:
         with open(file_name, "w") as filew:
             text = f"""
 Parquet file production report for table {self.args.table}
-run start/stop : {self.begin},{self._now()} 
+run start/stop : {self.begin}, {self._now()} 
 Expected number of files {self.num_files}
 Expected rows per file   {self.fetch_max}
-Table info\n{self.table_info_df}ß
+Table info\n{self.table_info_df}
+Column info\n{self.column_info_df}
+
+Intermediate Data Frame Types\n{self.df_schema}
+
 Parquet File info\n{pd.DataFrame(self.files, columns=["file name", "file size"])}
             """
             filew.write(text)
@@ -101,6 +106,12 @@ Parquet File info\n{pd.DataFrame(self.files, columns=["file name", "file size"])
         file_size = os.stat(file_name).st_size
         file_name= os.path.basename(file_name)
         self.files.append([file_name, f"{file_size:,d}"] )
+
+    def record_df_info(self, df):
+        "dig into the data frame and record the deep data types." 
+        s = ""
+        for c in df.columns: s = s + f" {c} {type(df[c][0])} \n"
+        self.df_schema = s
     
 def mk_md5(filename):
     "make md5 file correspoding to file named by filename"
@@ -155,6 +166,7 @@ def mk_parquet(args):
         batch = cur.fetchmany(max_rows)
         df =  pd.DataFrame(batch, columns=column_names)
         if not len(df) : break
+        monitor.record_df_info(df)
         dir_name = os.path.join(args.output_root, args.table)
         os.system (f"mkdir -p {dir_name}")
         file_name = os.path.join(dir_name, f"{args.table}_{file_number:04}.parquet")
