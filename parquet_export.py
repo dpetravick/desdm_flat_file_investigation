@@ -18,6 +18,7 @@ import time
 import hashlib
 import math
 import datetime
+import glob
 
 class Monitor:
     """ 
@@ -178,6 +179,25 @@ def mk_parquet(args):
         monitor.record_file(file_name)
     logging.info(f"{args.table} processing finished")
     monitor.mk_final_report()
+
+def dump(args):
+    import sqlite3 
+    path = os.path.join(args.root, args.table,"*.parquet")
+    cnx = sqlite3.connect('dog.sqlite3')
+    if_exists_option = 'fail'
+    for p_file in glob.glob(path):
+        print(f"opening {p_file}")
+        df = pd.read_parquet(p_file, engine='pyarrow')
+        print(df)
+        df.to_sql(name=args.table, con=cnx, 
+                  if_exists=if_exists_option)
+        if_exists_option = 'append'
+        print (f"read {p_file}")
+        sql=f"SELECT count(*) from {args.table}"
+        cur = cnx.cursor()
+        ans = cur.execute(sql).fetchone()
+        print(ans)
+        
 if __name__ == "__main__" :
 
     main_parser = argparse.ArgumentParser(
@@ -199,6 +219,11 @@ if __name__ == "__main__" :
     parser.add_argument("-d", "--database", choices=["sci", "oper"], 
                         help="sci or oper data bases", default="sci")
 
+    #dump --take a look at the parquet file.                                                                                                                                                          
+    parser = subparsers.add_parser('dump', help=dump.__doc__)
+    parser.set_defaults(func=dump)
+    parser.add_argument("table", help = "directory representing table contents")
+    parser.add_argument("-r", "--root", help = "def ./d2_parquet", default="./d2_parquet")
     args = main_parser.parse_args()
     loglevel=logging.__dict__[args.loglevel]
     assert type(loglevel) == type(1)
