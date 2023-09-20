@@ -47,7 +47,8 @@ class Manager:
         self.initialize()
         self.q("CREATE TABLE tables (tab TEXT, begun INTEGER, done INTEGER)")
         self.q("CREATE TABLE attempts (tab TEXT)")
-        for table in glob.glob(self.parquet_root):
+        for table in glob.glob(os.path.join(self.parquet_root,"*")):
+            table = os.path.basename(table)
             self.q(f"INSERT INTO tables VALUES ('{table}', 0, 0)")
 
    
@@ -57,21 +58,27 @@ class Manager:
     def q(self, sql):
         "log and execute queries"
         logging.debug(sql)
-        return self.cur.execute(sql)
+        result = self.cur.execute(sql)
+        self.conn.commit()
+        return result
 
-    def parquet_table_root(seld,table):
+    def parquet_table_root(self,table):
         return os.path.join( self.parquet_root, table)
 
     def shell(self, cmd):
         logging.debug(cmd)
         os.system(cmd)
 
+    def db_shell(self):
+        self.shell(f"sqlite3 {self.database_file}")
+
 #
 #   Track and inform about state of table ingest
 #
     def state_get_crashed_tables(self):
         sql = "SELECT tab FROM tables WHERE begun = 1 AND done = 0"
-        return self.q(sql)
+        ret = [r[0] for r in self.q(sql)]
+        return  ret 
     def state_reset_crashed_table(self, table):
         sql = f"UPDATE tables SET begun = 0 WHERE tab = '{table}'"
         return self.q(sql)
@@ -80,23 +87,23 @@ class Manager:
         return self.q(sql)
     def state_get_table_to_ingest(self):
         sql = f"SELECT  tab FROM tables WHERE begun = 0"
-        return self.q(sql)
+        ret = [r[0] for r in  self.q(sql)]
+        return ret
     def state_mark_table_ingested(self, table):
         sql = f"UPDATE tables SET done = 1 where tab = '{table}'"
         return self.q(sql)
-
 #
 #  clean actions
 #
     def act_clean_crashed_runs(self):
         "undo any actions for tables partially processed."
         for table in self.state_get_crashed_tables():
-            act_clean_crashed_run(table)
+            self.act_clean_crashed_run(table)
             self.state_reset_crashed_table(table)
 
     def act_clean_crashed_run(self, table):
         "remove any half-built state"
-        sql = "DROP TABLE {table} IF EXISTS"
+        sql = f"DROP TABLE IF EXISTS {table}"
         self.q(sql)
 
     #
@@ -112,22 +119,29 @@ class Manager:
 
     def act_ingest_table(self, table):
         "ingest one set o fparquet files into table"
-        for p_file in os.path.join(self.parquet_table_root(),"*.parquet"):
-            logging.info(f"{p_file} begin")
+        files = glob.glob(os.path.join(self.parquet_table_root(table), "*.parquet"))
+        for p_file in files:
+            logging.info(f"{p_file} begin ingest")
             df = pd.read_parquet(p_file, engine='pyarrow')
             df.to_sql(name=table, con=self.conn, if_exists='append')
-            logging.info(f"{p_file} done")
+            logging.info(f"{p_file} done  ingest")
 
 def ingest(args):
+    "ingest all parquet files into the DB"
     m = Manager(args)
     m.initialize()
     m.act_clean_crashed_runs()
     m.act_ingest_tables()
 
 def init(args):
+    "Initialize a directory structure for the DB release"
     m = Manager(args)
     m.initiate()
 
+def shell(arg):
+    "connect interactively into the DB"
+    m = Manager(args)
+    m.db_shell()
 
 if __name__ == "__main__" :
     main_parser = argparse.ArgumentParser(
@@ -149,7 +163,15 @@ if __name__ == "__main__" :
     parser.set_defaults(func=init)
     parser.add_argument("-p", "--parquet_root", help = "root of parquet files")   
     parser.add_argument("-d", "--delivery_root", help = "root of the sqlpuls delivery ", default="./")
+    
+    
+    parser = subparsers.add_parser('shell', help=shell.__doc__)
+    parser.set_defaults(func=shell)
+    parser.add_argument("-p", "--parquet_root", help = "root of parquet files")   
+    parser.add_argument("-d", "--delivery_root", help = "root of the sqlpuls delivery ", default="./")
+    
     args = main_parser.parse_args()
+    
     loglevel=logging.__dict__[args.loglevel]
     assert type(loglevel) == type(1)
     logging.basicConfig(level=logging.__dict__[args.loglevel])
