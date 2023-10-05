@@ -1,5 +1,7 @@
 #!/usr//bin/env python3                                                                                                                                                                    
 """
+Utility function suportin oracle -> parquet-> sqlite
+
 Dump an Oracle DB table to parquet files.
 
 Files created under the root directory specifed by the command line. 
@@ -9,6 +11,7 @@ The columns in the parqet tables are in low-to his cardnality oder.
 """
 
 import os
+import stat
 import argparse
 import pandas as pd
 import pandas.io.sql as psql
@@ -180,24 +183,72 @@ def mk_parquet(args):
     logging.info(f"{args.table} processing finished")
     monitor.mk_final_report()
 
-def dump(args):
-    import sqlite3 
-    path = os.path.join(args.root, args.table,"*.parquet")
-    cnx = sqlite3.connect('dog.sqlite3')
+def add_and_write (df, data):
+    columns = df.columns
+    df_tmp = pd.DataFrame([data], columns=columns)
+    df = pd.concat([df,df_tmp], ignore_index= True)
+    df.to_csv("dog.csv") #overwrite to preserve what can be
+    return df
+
+
+
+def sqlite(args):
+    """ingest parquet files respresenting a table into sqlite"""
+    import sqlite3
+
+    # locate files, if none complain and exit 
+    logging.info(f"path to parquet distribution is {args.root}") 
+    logging.info(f"tabel is  {args.table}")
+    logging.info(f"database is {args.database}")
+    parquet_path = os.path.join(args.root, args.table, "*.parquet")
+    parquet_files  = [f for f in glob.glob(parquet_path)]
+    total_files = len(parquet_files)
+    logging.info(f"{total_files} Parquet files for {args.table}")
+    if total_files == 0 : 
+        logging.error(f"no parquet files files under {parquet_path}")
+        exit(1)
+
+    # stufff e need inside the per-parquet-file loop
+    cnx = sqlite3.connect(f'{args.database}')
+    book_keep_df = pd.DataFrame(columns=["table","duration", "file"])
     if_exists_option = 'fail'
-    for p_file in glob.glob(path):
-        print(f"opening {p_file}")
+    n_files_seen = 0
+
+    for p_file in parquet_files:
+        n_files_seen += 1
+
+        t0 = time.time()
         df = pd.read_parquet(p_file, engine='pyarrow')
-        print(df)
+        logging.info(f"read {p_file} in {time.time() - t0}")
+
+        t0 = time.time()
         df.to_sql(name=args.table, con=cnx, 
+                  index=False,
                   if_exists=if_exists_option)
         if_exists_option = 'append'
-        print (f"read {p_file}")
-        sql=f"SELECT count(*) from {args.table}"
-        cur = cnx.cursor()
-        ans = cur.execute(sql).fetchone()
-        print(ans)
-        
+        book_keep_df = add_and_write (book_keep_df, [args.table, time.time()-t0, p_file])
+        cnx.commit()
+        logging.info(f"Ingested  {p_file} in {time.time() - t0} seconds")
+
+    #now record 
+    sql = f"SELECT count(*) from {args.table}"
+    cur = cnx.cursor()
+    ans = cur.execute(sql).fetchone()[0]
+    logging.info(f"Total rows in {args.table} is {ans}")
+
+def _directories(args):
+    """
+    return the lsistof directories at args.path/*
+
+    based on the assumption that every directory under the 
+    pasrtquet file root indicates it is a table to ingest.
+    """
+    path = os.path.join(args.root,"*")
+    files = glob.glob('/path/to/folder/*')
+    directories = [f for f in files is os.stat(f).stat.S_ISDIR]
+    logging.info (f"Directories: [directories]")
+    return directories
+
 if __name__ == "__main__" :
 
     main_parser = argparse.ArgumentParser(
@@ -206,7 +257,7 @@ if __name__ == "__main__" :
     main_parser.add_argument('--loglevel','-l',
                              help='loglevel NONE, "INFO",  DEBUG',
                              default="INFO")
-    main_parser.set_defaults(func=None)
+    main_parser.set_defaults(func=main_parser.print_help)
 
     subparsers = main_parser.add_subparsers()
 
@@ -216,23 +267,22 @@ if __name__ == "__main__" :
     parser.add_argument("table", help = "oracle table")
     parser.add_argument("-o", "--output_root", help = "def ./d1_parquet", default="./d2_parquet")
     parser.add_argument("-m", "--mem_max_bytes", help = "memory for connversion of table", default=50_000_000, type=int)
-    parser.add_argument("-d", "--database", choices=["sci", "oper"], 
+    parser.add_argument("-db", "--database", choices=["sci", "oper"], 
                         help="sci or oper data bases", default="sci")
+    parser.set_defaults(func=main_parser.print_help)
 
-    #dump --take a look at the parquet file.                                                                                                                                                          
-    parser = subparsers.add_parser('dump', help=dump.__doc__)
-    parser.set_defaults(func=dump)
+    #sqlite -- build a sqlite DB from parquet                                                                                                                                   
+    parser = subparsers.add_parser('sqlite', help=sqlite.__doc__)
+    parser.set_defaults(func=sqlite)
+    parser.add_argument("-db","--database",  help = "sqlite_database", default = "desdm_files.db")
+    parser.add_argument("root", help = "root of parquet distribution")
     parser.add_argument("table", help = "directory representing table contents")
-    parser.add_argument("-r", "--root", help = "def ./d2_parquet", default="./d2_parquet")
+
     args = main_parser.parse_args()
+
     loglevel=logging.__dict__[args.loglevel]
     assert type(loglevel) == type(1)
     logging.basicConfig(level=logging.__dict__[args.loglevel])
-
-    if not args.func:  # there are no subfunctions                                                                                                                                         
-        main_parser.print_help()
-        exit(1)
-
     args.func(args)
 
 

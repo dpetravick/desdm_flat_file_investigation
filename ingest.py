@@ -21,6 +21,8 @@ import pandas as pd
 import tabulate
 import configparser
 import subprocess
+import logging
+import time 
 
 prefix_template = """
 set pagesize 0   
@@ -46,6 +48,7 @@ def clean_tablename(table):
 
 def get_config(args):
    "return toml configuration as a dict"
+   logging.info("Reading ingest.toml")
    with open("ingest.toml",'r') as f :
       config = toml.load(f)
    return config
@@ -86,7 +89,7 @@ def is_analyzed(args):
    tha tholds assessments.  
    """
    sql = "select  * from sqlite_stat1;"
-   conn = sqlite3.connect(args.db)
+   conn = sqlite3.connect(args.database)
    cur = conn.cursor()
    result = cur.execute(sql)
    results = [r for r in result]
@@ -140,7 +143,7 @@ def export(arg):
    table_name = os.path.splitext(os.path.basename(args.schema_file))[0]
    logging.info(f"getting {table_name} as CSV from ORACLE")
    output_file = os.path.join(args.output_dir, f"{table_name}.export")
-   conn = sqlite3 .connect(args.db)
+   conn = sqlite3 .connect(args.database)
    schema = pd.read_csv(args.schema_file)
    columns  = ["TRIM({}) {}".format(row.COLUMN_NAME, row.COLUMN_NAME) for _ , row  in schema.iterrows() if row.INCLUDE == 't']
    items = ",".join(columns)
@@ -158,7 +161,7 @@ def create(args):
    table_name = os.path.splitext(os.path.basename(args.schema_file))[0]
    logging.info(f"making table {table_name} in SQLITE3")
    output_file = os.path.join(args.output_dir, f"{table_name}.create")
-   conn = sqlite3 .connect(args.db)
+   conn = sqlite3 .connect(args.database)
    schema = pd.read_csv(args.schema_file)
    values = ["{} {}".format(row.COLUMN_NAME, row.DATA_TYPE) for _ , row  in schema.iterrows() if row.INCLUDE == 't']
    values = ",".join(values)
@@ -175,7 +178,7 @@ def create(args):
 def show(args):
    "print high level information about the db"
    config = get_config(args)
-   conn = sqlite3.connect(args.db)
+   conn = sqlite3.connect(args.database)
    cur = conn.cursor()
    cur2 = conn.cursor()
    result = cur.execute("SELECT type, name FROM sqlite_master;").fetchall()
@@ -207,20 +210,31 @@ def ingest(args):
    "ingest a csv into sqlite"
    logging.info(f"about to read {args.csv}")
    table = os.path.splitext(os.path.basename(args.csv))[0]
-   db_name = args.db
+   db_name = args.database
    result = subprocess.run(['sqlite3',
-        ]                 str(db_name),
-                         '-cmd',
-                         '.mode csv',
-                         '.import  --skip 2 ' + str(args.csv)
+                            db_name,
+                            '-cmd',
+                            '.mode csv',
+                            '.import  --skip 2 ' + str(args.csv)
                                  + f' {table}' ,
                             f'ANALYZE {table};'])
 
 def deindex(args):
    "drop all indexes"
-   logging.info(f"about to drop all indexes")
-   conn = sqlite3 .connect(args.db)
+
+   logging.info(f"about to drop all indexes from {args.database}")
+   conn = sqlite3 .connect(args.database)
    cur = conn.cursor()
+   sql = f"SELECT type, name FROM sqlite_master where type = 'index'"
+   logging.info(sql)
+   result = cur.execute(sql)
+   for ttype, name in result:
+      sql = f"DROP INDEX {name};"
+      logging.info(sql) 
+      cur.execute(sql) 
+
+   
+
    for type, name in result:
       sql = f"drop index {name};"
       logging.info(sql)
@@ -232,18 +246,24 @@ def index(args):
    For a table, Drop indexes and then  apply indexes specified in the def file
    """
    table_name = os.path.splitext(os.path.basename(args.def_file))[0]
-   conn = sqlite3 .connect(args.db)
+   logging.info(f"obtaining information from {args.def_file}")
+   logging.info(f"making indexes into  {args.database}")
+   conn = sqlite3 .connect(args.database)
    cur=conn.cursor()
 
    # drop any existing indexes on table
    sql = f"SELECT type, name FROM sqlite_master where type = 'index' and  tbl_name = '{table_name}'"
    result = cur.execute(sql)
-   for ttype, name in result:
+   indexes = [r for r in result]
+   logging.info(f"Dropping all indexes {len(indexes)} for table  {table_name} in {args.database}")
+   for ttype, name in indexes:
       sql = f"DROP INDEX {name};"
       logging.info(sql) 
       cur.execute(sql) 
-
+      logging.info(f"{sql} done")
+   logging.info(f"Index dropping done for {table_name}")
    # apply new indexes
+   logging.info(f"making new indices for {table_name}")
    with open(args.def_file, 'r') as f: lines = f.read()
    for indexed_columns  in lines.split("\n"):
 
@@ -254,16 +274,22 @@ def index(args):
       indexname = [col.strip() for col in indexed_columns .split(",")]
       indexname = "_".join(indexname)
       indexname = f"{table_name}__{indexname}_idx"
+      t0 = time.time()
       logging.info(f"making index {indexname} in sqlite ")
       sql = f"CREATE INDEX IF NOT EXISTS {indexname} ON {table_name} ({indexed_columns}) ;"
-      print (sql)
+      logging.info (sql)
       conn.execute(sql)
+      conn.commit()
+      logging.info(f"ksql tool {time.time() - t0} seconds")
 
    # re-analyse the table and all of its indices.
-   logging.info(f"Indicies for {table_name} finished buiding analysis") 
+   logging.info(f"Indicies for {table_name} finished buiding now analysis") 
    sql = f"ANALYZE {table_name} ;"
+   logging.info(sql)
+   t0 = time.time()
    conn.execute(sql)
-   logging.info(f"Analsys for {table_name} finished") 
+   conn.commit()
+   logging.info(f"Analsys for {table_name} finished  {time.time() - t0} seconds ") 
 
 def query(args):
    "perform an example query specified in the toml file"
@@ -272,7 +298,7 @@ def query(args):
    query = config[args.query]["query"]
    print (doc)
    print (query)
-   conn = sqlite3.connect(args.db)
+   conn = sqlite3.connect(args.database)
    cur = conn.cursor()
    make_temp_support_tables(conn, config)
    result = cur.execute(query)
@@ -281,13 +307,20 @@ def query(args):
 def test_db(args):
    "test the db by doing all the test queries"
    import tabulate
+   breakpoint()
    config = get_config(args)
-   conn = sqlite3.connect(args.db)
+   logging.info(f"Commenting test of {args.database}")
+   conn = sqlite3.connect(args.database)
    make_temp_support_tables(conn, config)
    table=[]
    db_analyzed = is_analyzed(args)
+
+   # loop through all the tests defined in the toml file
+   # if there is a named query  just so that one.
    for key in config:
       if config[key]['type'] != 'query' : continue
+      if args.only_key  and config[key] != args.only_key:
+         logging.info(f"skipping {key} as only {args.only_key} requested")
       print(f'{key}:{config[key]["doc"]}')
       query = config[key]["query"]
       explain_query = "EXPLAIN QUERY PLAN " + query 
@@ -314,7 +347,7 @@ def plan(args):
    query = config[args.query]["query"]
    query = "EXPLAIN QUERY PLAN " + query
    print (query)
-   conn = sqlite3.connect(args.db)
+   conn = sqlite3.connect(args.database)
    make_temp_support_tables(conn, config)
    cur = conn.cursor()
    result = cur.execute(query)
@@ -333,7 +366,7 @@ def progress(args):
 
 def shell(args):
    "start an sqlilte shell against DB"
-   cmd = f"sqlite3 {args.db}"
+   cmd = f"sqlite3 {args.database}"
    help = """                                                                      
 .excel                   Display the output of next command in spreadsheet      
 .headers on|off          Turn display of headers on or off                      
@@ -403,8 +436,7 @@ if __name__ == "__main__":
     main_parser.add_argument('--loglevel','-l',
                              help='loglevel NONE, "INFO",  DEBUG',
                              default="INFO")
-    main_parser.add_argument('--db',  default='desdm-test.db',
-             help='the sqlite DB udner test')
+    main_parser.add_argument('-db', "--database",  help='the sqlite DB under test (def None)', default=None)
     main_parser.set_defaults(func=None)
         
     subparsers = main_parser.add_subparsers()   
@@ -430,7 +462,6 @@ if __name__ == "__main__":
     parser = subparsers.add_parser('index', help=index.__doc__)
     parser.set_defaults(func=index)
     parser.add_argument("def_file", help = "file named by table with index defnintions")
-
 
     # list known tables in toml file 
     parser = subparsers.add_parser('list', help=list.__doc__)
@@ -467,6 +498,7 @@ if __name__ == "__main__":
     # test the DB
     parser = subparsers.add_parser('test_db', help=test_db.__doc__)
     parser.set_defaults(func=test_db)
+    parser.add_argument("-k", "--only_key", "only this query", default=None)
 
     # drop indicies
     parser = subparsers.add_parser('deindex', help=deindex.__doc__)

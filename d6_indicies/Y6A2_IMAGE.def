@@ -11,3 +11,4 @@ TILENAME, FILETYPE, EXPNUM, CCDNUM, PFW_ATTEMPT_ID
 #
 # Needed for  se-into-coadd
 filename, filetype, ccdnum, expnum
+filetype, filename, ccdnum, expnum 
