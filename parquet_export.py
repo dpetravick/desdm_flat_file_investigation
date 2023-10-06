@@ -1,6 +1,6 @@
 #!/usr//bin/env python3                                                                                                                                                                    
 """
-Utility function suportin oracle -> parquet-> sqlite
+Utility function suporting oracle -> parquet-> sqlite
 
 Dump an Oracle DB table to parquet files.
 
@@ -193,23 +193,34 @@ def add_and_write (df, data):
 
 
 def sqlite(args):
-    """ingest parquet files respresenting a table into sqlite"""
+    """ingest parquet files respresenting one table into sqlite"""
     import sqlite3
-
-    # locate files, if none complain and exit 
-    logging.info(f"path to parquet distribution is {args.root}") 
-    logging.info(f"tabel is  {args.table}")
-    logging.info(f"database is {args.database}")
-    parquet_path = os.path.join(args.root, args.table, "*.parquet")
+    
+    # locate files, if none complain and exit
+    logging.info(f"Path to parquet distribution is {args.parquet_dist}") 
+    logging.info(f"Schema file showing needed columns is {args.schema_file}")
+    logging.info(f"Database is {args.database}")
+    logging.info(f"Table to build is {args.table}")
+    parquet_path = os.path.join(args.parquet_dist, args.table, "*.parquet")
     parquet_files  = [f for f in glob.glob(parquet_path)]
     total_files = len(parquet_files)
-    logging.info(f"{total_files} Parquet files for {args.table}")
+    logging.info(f"{total_files} Parquet files to ingest for {args.table}")
     if total_files == 0 : 
-        logging.error(f"no parquet files files under {parquet_path}")
+        logging.error(f"No parquet files files under {parquet_path}")
         exit(1)
 
-    # stufff e need inside the per-parquet-file loop
+
+    # stufff Need inside the per-parquet-file loop
+    #  DB collumns not accires forward.
+    #  Db connection.
+    #  Data frame to keep books. 
+    drop_list = []
+    if args.schema_file:
+        schema = pd.read_csv(args.schema_file)
+        drop_list = [row[1].COLUMN_NAME for row  in schema.iterrows() if row[1].INCLUDE != 't']
+        logging.info(f"Omitting columns {','.join(drop_list)}")
     cnx = sqlite3.connect(f'{args.database}')
+    
     book_keep_df = pd.DataFrame(columns=["table","duration", "file"])
     if_exists_option = 'fail'
     n_files_seen = 0
@@ -219,16 +230,16 @@ def sqlite(args):
 
         t0 = time.time()
         df = pd.read_parquet(p_file, engine='pyarrow')
-        logging.info(f"read {p_file} in {time.time() - t0}")
-
+        logging.info(f"Read {p_file} in {time.time() - t0}, dropping columns")
+        df = df.drop(columns=drop_list)
         t0 = time.time()
         df.to_sql(name=args.table, con=cnx, 
                   index=False,
                   if_exists=if_exists_option)
-        if_exists_option = 'append'
-        book_keep_df = add_and_write (book_keep_df, [args.table, time.time()-t0, p_file])
         cnx.commit()
         logging.info(f"Ingested  {p_file} in {time.time() - t0} seconds")
+        if_exists_option = 'append'
+        book_keep_df = add_and_write (book_keep_df, [args.table, time.time()-t0, p_file])
 
     #now record 
     sql = f"SELECT count(*) from {args.table}"
@@ -238,7 +249,7 @@ def sqlite(args):
 
 def _directories(args):
     """
-    return the lsistof directories at args.path/*
+    return the list of directories at args.path/*
 
     based on the assumption that every directory under the 
     pasrtquet file root indicates it is a table to ingest.
@@ -271,12 +282,13 @@ if __name__ == "__main__" :
                         help="sci or oper data bases", default="sci")
     parser.set_defaults(func=main_parser.print_help)
 
-    #sqlite -- build a sqlite DB from parquet                                                                                                                                   
+    #sqlite -- build a sqlite table from parquet                                                                                                                                   
     parser = subparsers.add_parser('sqlite', help=sqlite.__doc__)
     parser.set_defaults(func=sqlite)
     parser.add_argument("-db","--database",  help = "sqlite_database", default = "desdm_files.db")
-    parser.add_argument("root", help = "root of parquet distribution")
-    parser.add_argument("table", help = "directory representing table contents")
+    parser.add_argument("parquet_dist", help = "root of parquet distribution")
+    parser.add_argument("table", help = "table to buildn")
+    parser.add_argument("-s", "--schema_file",  help = "CSV file indicating which columns to bring forward", default = None)
 
     args = main_parser.parse_args()
 
@@ -284,6 +296,5 @@ if __name__ == "__main__" :
     assert type(loglevel) == type(1)
     logging.basicConfig(level=logging.__dict__[args.loglevel])
     args.func(args)
-
 
 

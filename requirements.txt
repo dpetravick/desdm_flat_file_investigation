@@ -1,3 +1,4 @@
 pandas
 oracledb
 pyarrow
+zstandard

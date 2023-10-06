@@ -41,20 +41,20 @@ exit
 """
 
 def clean_tablename(table):
-   "for shell progaming  get table name from tablenmme.case, etc"
+   "For shell progaming  get table name from tablenmme.case, etc"
    table = os.path.splitext(table)[0]
-   logging.info(f"using table {table}")
+   logging.info(f"Using table {table}")
    return table
 
 def get_config(args):
-   "return toml configuration as a dict"
+   "Return toml configuration as a dict"
    logging.info("Reading ingest.toml")
    with open("ingest.toml",'r') as f :
       config = toml.load(f)
    return config
 
 def wrap(item):
-   "format a prose to fit into a column"
+   "Format a prose to fit into a column"
    import textwrap
    w =  textwrap.TextWrapper(subsequent_indent=" ",
                              break_long_words = True,
@@ -65,7 +65,7 @@ def wrap(item):
    return stanza
 
 def format_plan_item(line):
-   " crude parser to make plans more readable"
+   "Crude parser to make plans more readable"
    import shlex
    out = []
    for token in shlex.split(line):
@@ -97,11 +97,11 @@ def is_analyzed(args):
    return False
 
 def make_temp_support_tables(conn, config):
-   "temp tables last as long as the connection"
+   "Temp tables last as long as the connection"
    #import pdb; pdb.set_trace()
    for c in config: 
       if config[c]["type"] != "temp support" : continue
-      logging.info(f"about to make temp support table {c} and its index")
+      logging.info(f"About to make temp support table {c} and its index")
       sql = config[c]["query"]
       cur = conn.cursor()
       result = cur.execute(sql)
@@ -139,9 +139,9 @@ def define(args):
    print (sql_script)
 
 def export(arg):
-   "get a CSV of data from ORACLE"
+   "Get a CSV of data from ORACLE"
    table_name = os.path.splitext(os.path.basename(args.schema_file))[0]
-   logging.info(f"getting {table_name} as CSV from ORACLE")
+   logging.info(f"Getting {table_name} as CSV from ORACLE")
    output_file = os.path.join(args.output_dir, f"{table_name}.export")
    conn = sqlite3 .connect(args.database)
    schema = pd.read_csv(args.schema_file)
@@ -157,9 +157,9 @@ def export(arg):
    
    
 def create(args):
-   "make schema for table"
+   "Make schema for table"
    table_name = os.path.splitext(os.path.basename(args.schema_file))[0]
-   logging.info(f"making table {table_name} in SQLITE3")
+   logging.info(f"Making table {table_name} in SQLITE3")
    output_file = os.path.join(args.output_dir, f"{table_name}.create")
    conn = sqlite3 .connect(args.database)
    schema = pd.read_csv(args.schema_file)
@@ -176,7 +176,7 @@ def create(args):
 
 
 def show(args):
-   "print high level information about the db"
+   "Print high level information about the db"
    config = get_config(args)
    conn = sqlite3.connect(args.database)
    cur = conn.cursor()
@@ -208,7 +208,7 @@ def show(args):
 
 def ingest(args):
    "ingest a csv into sqlite"
-   logging.info(f"about to read {args.csv}")
+   logging.info(f"About to read {args.csv}")
    table = os.path.splitext(os.path.basename(args.csv))[0]
    db_name = args.database
    result = subprocess.run(['sqlite3',
@@ -220,9 +220,9 @@ def ingest(args):
                             f'ANALYZE {table};'])
 
 def deindex(args):
-   "drop all indexes"
+   "Drop all indexes"
 
-   logging.info(f"about to drop all indexes from {args.database}")
+   logging.info(f"About to drop all indexes from {args.database}")
    conn = sqlite3 .connect(args.database)
    cur = conn.cursor()
    sql = f"SELECT type, name FROM sqlite_master where type = 'index'"
@@ -232,8 +232,6 @@ def deindex(args):
       sql = f"DROP INDEX {name};"
       logging.info(sql) 
       cur.execute(sql) 
-
-   
 
    for type, name in result:
       sql = f"drop index {name};"
@@ -246,8 +244,8 @@ def index(args):
    For a table, Drop indexes and then  apply indexes specified in the def file
    """
    table_name = os.path.splitext(os.path.basename(args.def_file))[0]
-   logging.info(f"obtaining information from {args.def_file}")
-   logging.info(f"making indexes into  {args.database}")
+   logging.info(f"Obtaining information from {args.def_file}")
+   logging.info(f"Making indexes into  {args.database}")
    conn = sqlite3 .connect(args.database)
    cur=conn.cursor()
 
@@ -263,7 +261,7 @@ def index(args):
       logging.info(f"{sql} done")
    logging.info(f"Index dropping done for {table_name}")
    # apply new indexes
-   logging.info(f"making new indices for {table_name}")
+   logging.info(f"Making new indices for {table_name}")
    with open(args.def_file, 'r') as f: lines = f.read()
    for indexed_columns  in lines.split("\n"):
 
@@ -275,24 +273,24 @@ def index(args):
       indexname = "_".join(indexname)
       indexname = f"{table_name}__{indexname}_idx"
       t0 = time.time()
-      logging.info(f"making index {indexname} in sqlite ")
+      logging.info(f"Making index {indexname} in sqlite ")
       sql = f"CREATE INDEX IF NOT EXISTS {indexname} ON {table_name} ({indexed_columns}) ;"
       logging.info (sql)
       conn.execute(sql)
       conn.commit()
-      logging.info(f"ksql tool {time.time() - t0} seconds")
+      logging.info(f"SQL took {time.time() - t0} seconds")
 
-   # re-analyse the table and all of its indices.
-   logging.info(f"Indicies for {table_name} finished buiding now analysis") 
+   # Re-analyse the table and all of its indices.
+   logging.info(f"Indicies for {table_name} finished buiding now analyzng the table.") 
    sql = f"ANALYZE {table_name} ;"
    logging.info(sql)
    t0 = time.time()
    conn.execute(sql)
    conn.commit()
-   logging.info(f"Analsys for {table_name} finished  {time.time() - t0} seconds ") 
+   logging.info(f"Analysis for {table_name} finished  {time.time() - t0} seconds ") 
 
 def query(args):
-   "perform an example query specified in the toml file"
+   " Perform an example query specified in the toml file"
    config = get_config(args)
    doc = config[args.query]["doc"]
    query = config[args.query]["query"]
@@ -305,11 +303,10 @@ def query(args):
    for r in result: print(r)
 
 def test_db(args):
-   "test the db by doing all the test queries"
+   "Test the db by doing all the test queries"
    import tabulate
-   breakpoint()
    config = get_config(args)
-   logging.info(f"Commenting test of {args.database}")
+   logging.info(f"Beginning test of {args.database}")
    conn = sqlite3.connect(args.database)
    make_temp_support_tables(conn, config)
    table=[]
@@ -319,8 +316,9 @@ def test_db(args):
    # if there is a named query  just so that one.
    for key in config:
       if config[key]['type'] != 'query' : continue
-      if args.only_key  and config[key] != args.only_key:
-         logging.info(f"skipping {key} as only {args.only_key} requested")
+      if args.only_key  and key != args.only_key:
+         logging.info(f"Skipping {key} as only {args.only_key} requested")
+         continue
       print(f'{key}:{config[key]["doc"]}')
       query = config[key]["query"]
       explain_query = "EXPLAIN QUERY PLAN " + query 
@@ -329,9 +327,12 @@ def test_db(args):
       plan = cur.execute(explain_query)
       plans = "\n".join([format_plan_item(f"{p[3]}") for p in plan])
       t0 =  time.time()
-      result = cur.execute(query)
-      pass
-      n_items  = len([r for r in result])
+ 
+      if args.plan_only :
+         n_items = "N/A -- plan only"
+      else:
+         result = cur.execute(query)
+         n_items  = len([r for r in result])
       duration = time.time()-t0
       table.append( [key, db_analyzed, f"{duration:.2f}", n_items, format_sql(query), plans] ) 
       print (f"{n_items} returned in {time.time()-t0} seconds")
@@ -365,7 +366,7 @@ def progress(args):
 
 
 def shell(args):
-   "start an sqlilte shell against DB"
+   "Start an sqlilte shell against DB"
    cmd = f"sqlite3 {args.database}"
    help = """                                                                      
 .excel                   Display the output of next command in spreadsheet      
@@ -384,7 +385,7 @@ def shell(args):
    
 
 def sqlplus(args):
-   "start an sqlplus session using info from  $HOME/.desservices.ini"
+   "Start an sqlplus session using info from  $HOME/.desservices.ini"
 
    # get info from desservices.inifile for connection
    home = os.environ["HOME"]
@@ -420,7 +421,7 @@ def compress(args):
             if not buff: break 
             compressor.write(buff)
             print (".", end="", flush=True)
-         compressor.flush()
+         compressor.flush(zstd.FLUSH_FRAME)
    infile_gb  = os.stat(args.infile).st_size/1000*1000*1000
    outfile_gb = os.stat(args.outfile).st_size/1000*1000*1000
    compression_ratio = outfile_gb/infile_gb
@@ -498,7 +499,8 @@ if __name__ == "__main__":
     # test the DB
     parser = subparsers.add_parser('test_db', help=test_db.__doc__)
     parser.set_defaults(func=test_db)
-    parser.add_argument("-k", "--only_key", "only this query", default=None)
+    parser.add_argument("-k", "--only_key", help = "only this query by toml key", default=None)
+    parser.add_argument("-p", "--plan_only", help = "only plan do not query", action="store_true",  default=False)
 
     # drop indicies
     parser = subparsers.add_parser('deindex', help=deindex.__doc__)
