@@ -390,11 +390,17 @@ def sqlplus(args):
    # get info from desservices.inifile for connection
    home = os.environ["HOME"]
    config = configparser.ConfigParser()
-   config.read(os.path.join(home, ".desservices.ini"))
+   config_file = os.path.join(home, ".desservices.ini")
+   config.read(config_file)
    service=args.service
-   user= config[service]["user"]
-   passwd = config[service]["passwd"]
-   server = config[service]["server"]
+   if service in config.keys():
+      user= config[service]["user"]
+      passwd = config[service]["passwd"]
+      server = config[service]["server"]
+   else:
+      logging.error(f"{service} not in {config_file}")
+      logging.error(f"Choose from {[k for k in config.keys()]}")
+      exit(1)
 
    # process any arguments to sqlplus
    cmd_args = ""
