@@ -5,9 +5,11 @@ Utility function suporting oracle -> parquet-> sqlite
 Dump an Oracle DB table to parquet files.
 
 Files created under the root directory specifed by the command line. 
-For large tables, one of more parqet files are created.
-Files for a tabel are created under <root>/<table-name>/
-The columns in the parqet tables are in low-to his cardnality oder. 
+For large tables, one of more parquet files are created.
+Files for a table are created under <root>/<table-name>/
+The columns in the parquet file  are in low-to-high cardnality oder.
+
+The -n flag gises estimates, but does not ETL the data. 
 """
 
 import os
@@ -22,34 +24,74 @@ import hashlib
 import math
 import datetime
 import glob
+import sys
+import json 
+
+class Bulk:
+    def __init__ (self, args, conn):
+        self.args = args
+        self.conn = conn
+        self.table = args.table
+        self.key_sequence  = []
+    def x(self):
+        pass
+        #key_col = args.key_col 
+        #count_sql = f"select distinct(count{key_col}) from {table}"
+        #sequence_sql = f"select distinct {key_col} from  {table} order by {key_col}"
+        # load self.sequence
+
+    def next_set(self):
+        pass
+        """
+        for next_key self.key_sequence:
+            # make test path for done flag.
+            if flgged as done :
+                #log stuff
+                continue
+            sql_for_key = f""
+            self.paquet_dir  = "" # where 
+            path_for_parquet = ""
+            path_for_done_flag = ""
+            path_for_parquet_file = "" # Keep unique 
+            yield all_this_info
+
+        """
 
 class Monitor:
     """ 
     acquire and hold misc information to guide, report
-    and summarize teh parquet-ification of a table 
+    and summarize the parquet-ification of a table 
     """
 
-    def __init__(self, args, conn):
+    def __init__(self, args, conn, key="", where=""):
         self.args = args
         self.conn = conn
+        self.key = key
+        self.where = where
         self.get_column_info()
         self.get_table_info()
         self.files = []
+        self.df_schema = pd.DataFrame()
         self.begin = self._now()
-        self.df_schema = None
-    
+        self.file_dict = {}
+        self.num_parquet_files = 0
+
     def _now(self):
         now =datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return now 
     
     def get_table_info(self):
         """"
-        compute quantities relevnt to size of parquet files, 
+        compute quantities relevant to size of parquet files, 
 
         Idea -- while users can grab the columns they need and 
         minimize memory in other ways, We cannot. we need 
-        memory to hold the fetch and the transpose of fetch.
-        Chose a number of rows that will fit into memory 
+        memory to hold the row-ordered fetch and the column-oriented 
+        transpose of fetch.
+
+        Choose a number of rows that will fit into memory as 
+        given by the memory command line parameter.
+
     """
         cur = self.conn.cursor()
         sql = f"""
@@ -60,7 +102,7 @@ class Monitor:
         WHERE 
               table_name = '{self.args.table}' """
         self.table_info_df = psql.read_sql(sql, con=self.conn)
-        logging.info(f"table info\n{self.table_info_df}")
+        logging.debug(f"table info\n{self.table_info_df}")
         if len(self.table_info_df) != 1 : 
             logging.fatal("errror query for {args.table} did not return one row")
             exit(1)
@@ -68,16 +110,27 @@ class Monitor:
         self.bytes_per_row = self.table_info_df["AVG_ROW_LEN"][0]
         self.mem_max = self.args.mem_max_bytes
         self.fetch_max = int(self.mem_max / self.bytes_per_row)
-        self.num_files =   math.ceil(self.table_info_df["NUM_ROWS"][0]/self.fetch_max)
+        if self.where : 
+            sql =f"""
+            SELECT
+               count(*) num_row
+            FROM
+               {self.args.table}
+               {self.where} """
+            temp_df =  psql.read_sql(sql, con=self.conn)
+            self.num_files = math.ceil(temp_df["NUM_ROW"]/self.args.mem_max_bytes)
+        else:
+            self.num_files =   math.ceil(self.table_info_df["NUM_ROWS"][0]/self.fetch_max)
         logging.info(f"table, bytes/row: {self.args.table}, {self.bytes_per_row}")
         logging.info(f"table, rows fetched/file: {self.args.table}, {self.fetch_max}")
         logging.info(f"table, num_files: {self.args.table}, {self.num_files}")
 
     def get_column_info(self):
         cur = self.conn.cursor()
+        self.oracle_attributes = ["column_name", "num_distinct", "data_type", "data_length", "data_precision"]
         sql = f"""
             SELECT 
-                column_name,  num_distinct, data_type, data_length, data_precision
+                {",".join(self.oracle_attributes)} 
             FROM  
              all_tab_columns
             WHERE 
@@ -86,37 +139,82 @@ class Monitor:
                 num_distinct
         """
         self.column_info_df = psql.read_sql(sql, con=self.conn)
-        logging.info(f"column info\n {self.column_info_df}")
+        logging.debug(f"column info\n {self.column_info_df}")
         self.column_names = self.column_info_df['COLUMN_NAME'].tolist()      
     
+    def oracle_column_info_as_dict(self):
+        dout = {}
+        for d in json.loads(self.column_info_df.to_json(orient="records")):
+            dout[d["COLUMN_NAME"]] = d
+            del d["COLUMN_NAME"]
+        return dout
+
+    def  get_output_dir(self):
+        self.output_dir = os.path.join(self.args.output_root, args.table)
+        os.system (f"mkdir -p {self.output_dir}")
+        return self.output_dir
+
     def mk_final_report(self):
-        file_name =  os.path.join(self.args.output_root, self.args.table, f"{self.args.table}.report")
+        import getpass
+        import platform
+        import sys
+        import json
+
+        key = self.key
+        if self.key :key = f"-{self.key}"
+        file_name =  os.path.join(self.args.output_root, self.args.table, f"{self.args.table}{key}.json")
         logging.info(f"writing report to {file_name}")
-        with open(file_name, "w") as filew:
-            text = f"""
-Parquet file production report for table {self.args.table}
-run start/stop : {self.begin}, {self._now()} 
-Expected number of files {self.num_files}
-Expected rows per file   {self.fetch_max}
-Table info\n{self.table_info_df}
-Column info\n{self.column_info_df}
+        meta_info = {
+            "who"          : f"{getpass.getuser()}",
+            "table"        : f"{self.args.table}",
+            "key"          : f"{self.key}",
+            "where_clause" : f"{self.where}",
+            "what"         : f"Parquet file production report for table {self.args.table}",
+            "start"        : f"{self.begin}",
+            "end"          : f"{self._now()}",
+            "machine"      : f"{platform.node()}",
+            "how"          : sys.argv
+            }
+        file_info = {
+            "number_files"      : f"{self.num_files}",
+            "max_rows_per_file" : f"{self.fetch_max}",
+            "files"             : self.file_dict
+            }
+        oracle_info = {
+            "table_size"   : f"{self.table_info_df}",
+            "column_metadata" : self.oracle_column_info_as_dict()
+        }
+        pandas_info = {
+            "metadata"   : self.pandas_column_info_as_dict()
+        }
+        all_info = {
+            "meta_info"   : meta_info,
+            "file_info"   : file_info, 
+            "oracle_info" : oracle_info,
+            "pandas_info" : pandas_info
+        }
+        text = json.dumps(all_info, sort_keys=True, indent=4)
+        with open(file_name, "w") as filew: filew.write(text)
 
-Intermediate Data Frame Types\n{self.df_schema}
-
-Parquet File info\n{pd.DataFrame(self.files, columns=["file name", "file size"])}
-            """
-            filew.write(text)
     def record_file(self, file_name):
+        import hashlib
+        self.num_parquet_files += 1
         file_size = os.stat(file_name).st_size
-        file_name= os.path.basename(file_name)
-        self.files.append([file_name, f"{file_size:,d}"] )
+        file_base = os.path.basename(file_name)
+        with open(file_name, 'rb') as f: md5sum = hashlib.md5(f.read()).hexdigest()
+        self.file_dict[file_base] = {
+            "md5sum" : md5sum,
+            "size"   : file_size,
+            "nth"    : self.num_files
+        }
 
     def record_df_info(self, df):
-        "dig into the data frame and record the deep data types." 
-        s = ""
-        for c in df.columns: s = s + f" {c} {type(df[c][0])} \n"
-        self.df_schema = s
-    
+        self.df_schema = df
+
+    def pandas_column_info_as_dict(self):
+        d = { l[0] : f"{l[1]}"  for l in zip(self.df_schema, self.df_schema.dtypes)}
+        return d
+        
 def mk_md5(filename):
     "make md5 file correspoding to file named by filename"
 
@@ -131,7 +229,7 @@ def ora_connect(args):
     Connect to DESSCI or DESOPER oracle databases 
 
     passwords are assumed to be in the environment as
-    OPER_APSS or SCI_PASS.   
+    OPER_PASS or SCI_PASS.   
     """
     user = "donaldp"
     if args.database == "sci" :
@@ -154,7 +252,7 @@ def mk_parquet(args):
     make parquet file(s) from a table.
 
     For large tables make a number of parquet 
-    files, for the query data to no overly fill
+    files, for the query data to not overly fill
     memory.
     """
     conn = ora_connect(args)
@@ -163,25 +261,60 @@ def mk_parquet(args):
     column_names = monitor.column_names
     max_rows  = monitor.fetch_max
     sql = f"select {','.join(column_names)} from {args.table}"
-    logging.info(sql)
-    rows = cur.execute(sql)
-    for file_number in range(1000):  
-        t0 = time.time()
-        batch = cur.fetchmany(max_rows)
-        df =  pd.DataFrame(batch, columns=column_names)
-        if not len(df) : break
-        monitor.record_df_info(df)
-        dir_name = os.path.join(args.output_root, args.table)
-        os.system (f"mkdir -p {dir_name}")
-        file_name = os.path.join(dir_name, f"{args.table}_{file_number:04}.parquet")
-        logging.info(f"beginning build of {file_name} ({max_rows} rows)")
-        df.to_parquet(file_name, engine='pyarrow',compression='snappy')
-        mk_md5(file_name)
-        file_size = os.stat(file_name).st_size
-        logging.info(f"end of build of {file_name} {file_size:,d} bytes -- {(time.time()-t0):0.2f} seconds ")
-        monitor.record_file(file_name)
+    logging.debug(sql)
+    if not args.noop :
+        rows = cur.execute(sql)
+        for file_number in range(1000):  
+            t0 = time.time()
+            batch = cur.fetchmany(max_rows)
+            df =  pd.DataFrame(batch, columns=column_names)
+            if not len(df) : break
+            monitor.record_df_info(df)
+            output_dir = monitor.get_output_dir()
+            file_name = os.path.join(output_dir, f"{args.table}_{file_number:04}.parquet")
+            logging.info(f"beginning build of {file_name} ({max_rows} rows)")
+            df.to_parquet(file_name, engine='pyarrow',compression='snappy')
+            file_size = os.stat(file_name).st_size
+            logging.info(f"end of build of {file_name} {file_size:,d} bytes -- {(time.time()-t0):0.2f} seconds ")
+            monitor.record_file(file_name)
     logging.info(f"{args.table} processing finished")
     monitor.mk_final_report()
+
+def mk_parquet2(args):
+    """
+    make parquet file(s) from a table, and special arguments
+
+    For large tables make a number of parquet 
+    files, for the query data to not overly fill
+    memory.
+    """
+    conn = ora_connect(args)
+    cur = conn.cursor()
+    monitor = Monitor(args, conn, key=args.key, where=args.where)
+    column_names = monitor.column_names
+    max_rows  = monitor.fetch_max
+    sql = f"select {','.join(column_names)} from {args.table}  {args.where}"
+    logging.debug(sql)
+    rows = cur.execute(sql)
+    if not args.noop :
+        for file_number in range(1000):  
+            t0 = time.time()
+            batch = cur.fetchmany(max_rows)
+            df =  pd.DataFrame(batch, columns=column_names)
+            if not len(df) : break
+            monitor.record_df_info(df)
+            output_dir = monitor.get_output_dir()
+            file_name = os.path.join(output_dir, f"{args.table}-{args.key}-{file_number:04}.parquet")
+            logging.info(f"beginning build of {file_name} ({max_rows} rows)")
+            df.to_parquet(file_name, engine='pyarrow',compression='snappy')
+            mk_md5(file_name)
+            file_size = os.stat(file_name).st_size
+            logging.info(f"end of build of {file_name} {file_size:,d} bytes -- {(time.time()-t0):0.2f} seconds ")
+            monitor.record_file(file_name)
+    logging.info(f"{args.table} processing finished")
+    monitor.mk_final_report()
+
+
 
 def add_and_write (df, data):
     columns = df.columns
@@ -260,6 +393,12 @@ def _directories(args):
     logging.info (f"Directories: [directories]")
     return directories
 
+
+def exit_with_help(args):
+    args.help(sys.stderr)
+    exit(1)
+
+
 if __name__ == "__main__" :
 
     main_parser = argparse.ArgumentParser(
@@ -268,11 +407,12 @@ if __name__ == "__main__" :
     main_parser.add_argument('--loglevel','-l',
                              help='loglevel NONE, "INFO",  DEBUG',
                              default="INFO")
-    main_parser.set_defaults(func=main_parser.print_help)
-
+    main_parser.set_defaults(func=exit_with_help)
+    main_parser.set_defaults(help=main_parser.print_help)
+ 
     subparsers = main_parser.add_subparsers()
 
-    #parquet =- make parquet files                                                                                                                                                         
+    #parquet =- make parquet files                                                                                                                                                  
     parser = subparsers.add_parser('parquet', help=mk_parquet.__doc__)
     parser.set_defaults(func=mk_parquet)
     parser.add_argument("table", help = "oracle table")
@@ -280,7 +420,21 @@ if __name__ == "__main__" :
     parser.add_argument("-m", "--mem_max_bytes", help = "memory for connversion of table", default=50_000_000, type=int)
     parser.add_argument("-db", "--database", choices=["sci", "oper"], 
                         help="sci or oper data bases", default="sci")
-    parser.set_defaults(func=main_parser.print_help)
+    parser.add_argument ("-n", "--noop", help = "tell me about the job w/out doing it",  action="store_true", default=False)
+
+
+    #parquet2 =- make parquet files                                                                                                                                                
+    parser = subparsers.add_parser('parquet2', help=mk_parquet.__doc__)
+    parser.set_defaults(func=mk_parquet2)
+    parser.add_argument("table", help = "oracle table")
+    parser.add_argument("-o", "--output_root", help = "def ./d1_parquet", default="./d2_parquet")
+    parser.add_argument("-m", "--mem_max_bytes", help = "memory for connversion of table", default=50_000_000, type=int)
+    parser.add_argument("-db", "--database", choices=["sci", "oper"], 
+                        help="sci or oper data bases", default="sci")
+    parser.add_argument ("-n", "--noop", help = "tell me about the job w/out doing it",  action="store_true", default=False)
+    parser.add_argument("key", help = "a stngin naming what's included in the where clause, eg. healpix key")                     
+    parser.add_argument("where", help = "where clause, including the listeral WHERE ")
+
 
     #sqlite -- build a sqlite table from parquet                                                                                                                                   
     parser = subparsers.add_parser('sqlite', help=sqlite.__doc__)
