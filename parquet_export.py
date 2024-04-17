@@ -77,6 +77,8 @@ class Monitor:
         self.begin = self._now()
         self.file_dict = {}
         self.num_parquet_files = 0
+        self.pandas_column_info = {}
+        self.parquet_column_info = {}
 
     def get_table_info(self):
         """"
@@ -141,18 +143,26 @@ class Monitor:
         self.column_info_df = psql.read_sql(sql, con=self.conn)
         logging.debug(f"column info\n {self.column_info_df}")
         self.column_names = self.column_info_df['COLUMN_NAME'].tolist()      
+        self.set_oracle_column_info()
     
-    def oracle_column_info_as_dict(self):
+    def set_oracle_column_info(self):
         dout = {}
         for d in json.loads(self.column_info_df.to_json(orient="records")):
             dout[d["COLUMN_NAME"]] = d
             del d["COLUMN_NAME"]
-        return dout
+        self.oracle_column_info = dout
 
 #
-#  File methods
+#  Pandas methods
 #
+    def record_df_info(self, df):
+        self.df_schema = df
+        d = { l[0] : f"{l[1]}"  for l in zip(self.df_schema, self.df_schema.dtypes)}
+        self.pandas_column_info = d
 
+#
+# parquet methods
+#
     def record_file(self, file_name):
         import hashlib
         self.num_files += 1
@@ -160,22 +170,33 @@ class Monitor:
         file_base = os.path.basename(file_name)
         with open(file_name, 'rb') as f: md5sum = hashlib.md5(f.read()).hexdigest()
         self.file_dict[file_base] = {
+            "file"   : f"{file_name}",
             "md5sum" : md5sum,
             "size"   : file_size,
             "nth"    : self.num_files
         }
 
-    def record_df_info(self, df):
-        self.df_schema = df
-
-    def pandas_column_info_as_dict(self):
-        d = { l[0] : f"{l[1]}"  for l in zip(self.df_schema, self.df_schema.dtypes)}
-        return d
-
-    def  get_output_dir(self):
+    def get_output_dir(self):
         self.output_dir = os.path.join(self.args.output_root, args.table)
         os.system (f"mkdir -p {self.output_dir}")
         return self.output_dir
+
+    def record_parquet_column_info(self, path):
+        import pyarrow.parquet as pq
+        # record types, column names.
+        schema = pq.read_schema(path, memory_map=True)
+        names = schema.names
+        types = [str(pa_dtype) for pa_dtype in schema.types]
+        self.parquet_column_info  = {i[0]:i[1] for i in zip(names, types)}
+
+
+    def parquet_column_info_as_dict():
+        return self.parquet_types 
+        
+        
+#
+# Reporting methods
+#
 
     def mk_final_report(self):
         import getpass
@@ -206,19 +227,34 @@ class Monitor:
         oracle_info = {
             "table_size"      : f"{self.table_info_df}",
             "num_rows"        : f"{self.num_rows}",
-            "column_metadata" : self.oracle_column_info_as_dict(),
         }
-        pandas_info = {
-            "metadata"   : self.pandas_column_info_as_dict()
-        }
+
         all_info = {
             "meta_info"   : meta_info,
             "file_info"   : file_info, 
             "oracle_info" : oracle_info,
-            "pandas_info" : pandas_info
+            "column_info" : self.merged_column_info()
         }
+        
+        
+        
+
         text = json.dumps(all_info, sort_keys=True, indent=4)
         with open(file_name, "w") as filew: filew.write(text)
+
+    def merged_column_info(self):
+        """ 
+        build a dict for each column  with detailed info about types, etc
+        for each stage of data handling (oracle, panads, parquet).
+        """
+        column_info = {}
+        for key in self.oracle_column_info.keys():
+             column_info[key] = {
+                "oracle" : self.oracle_column_info.get(key, "n/a"),
+                "pandas" : self.pandas_column_info.get(key, "n/a"),
+                "parquet" :self.parquet_column_info.get(key, "n/a")
+               }
+        return column_info
 #
 # Utility methods
 #
@@ -226,16 +262,6 @@ class Monitor:
         now =datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         return now 
     
-"""
-def mk_md5(filename):
-    "make md5 file correspoding to file named by filename"
-
-    with open(filename,"rb") as filer:
-        value = hashlib.md5(filer.read())
-        hexvalue = value.hexdigest()
-    with open(filename + ".md5","w") as filew:
-        filew.write(f"{hexvalue}\n")
-"""
 
 def ora_connect(args):
     """ 
@@ -324,6 +350,8 @@ def mk_parquet2(args):
             file_size = os.stat(file_name).st_size
             logging.info(f"end of build of {file_name} {file_size:,d} bytes -- {(time.time()-t0):0.2f} seconds ")
             monitor.record_file(file_name)
+            #break
+    monitor.record_parquet_column_info(file_name) # 
     logging.info(f"{args.table} processing finished")
     monitor.mk_final_report()
 
