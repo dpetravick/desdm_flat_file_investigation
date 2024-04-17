@@ -5,12 +5,14 @@ Utility function suporting oracle -> parquet-> sqlite
 Dump an Oracle DB table to parquet files.
 
 Files created under the root directory specifed by the command line. 
-For large tables, one of more parquet files are created.
+For large tables. One of more parquet files are created.
 Files for a table are created under <root>/<table-name>/
 The columns in the parquet file  are in low-to-high cardnality oder.
 
 The -n flag gises estimates, but does not ETL the data. 
 """
+import warnings
+warnings.simplefilter(action='ignore', category=UserWarning)
 
 import os
 import stat
@@ -76,10 +78,6 @@ class Monitor:
         self.file_dict = {}
         self.num_parquet_files = 0
 
-    def _now(self):
-        now =datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        return now 
-    
     def get_table_info(self):
         """"
         compute quantities relevant to size of parquet files, 
@@ -118,9 +116,11 @@ class Monitor:
                {self.args.table}
                {self.where} """
             temp_df =  psql.read_sql(sql, con=self.conn)
-            self.num_files = math.ceil(temp_df["NUM_ROW"]/self.args.mem_max_bytes)
+            self.num_rows = temp_df["NUM_ROW"][0]
         else:
-            self.num_files =   math.ceil(self.table_info_df["NUM_ROWS"][0]/self.fetch_max)
+            self.num_rows = self.table_info_df["NUM_ROW"][0]
+        self.num_files =   math.ceil(self.num_rows/self.fetch_max)
+        logging.info(f"table, total_rows: {self.args.table}, {self.num_rows}")
         logging.info(f"table, bytes/row: {self.args.table}, {self.bytes_per_row}")
         logging.info(f"table, rows fetched/file: {self.args.table}, {self.fetch_max}")
         logging.info(f"table, num_files: {self.args.table}, {self.num_files}")
@@ -148,6 +148,29 @@ class Monitor:
             dout[d["COLUMN_NAME"]] = d
             del d["COLUMN_NAME"]
         return dout
+
+#
+#  File methods
+#
+
+    def record_file(self, file_name):
+        import hashlib
+        self.num_files += 1
+        file_size = os.stat(file_name).st_size
+        file_base = os.path.basename(file_name)
+        with open(file_name, 'rb') as f: md5sum = hashlib.md5(f.read()).hexdigest()
+        self.file_dict[file_base] = {
+            "md5sum" : md5sum,
+            "size"   : file_size,
+            "nth"    : self.num_files
+        }
+
+    def record_df_info(self, df):
+        self.df_schema = df
+
+    def pandas_column_info_as_dict(self):
+        d = { l[0] : f"{l[1]}"  for l in zip(self.df_schema, self.df_schema.dtypes)}
+        return d
 
     def  get_output_dir(self):
         self.output_dir = os.path.join(self.args.output_root, args.table)
@@ -181,8 +204,9 @@ class Monitor:
             "files"             : self.file_dict
             }
         oracle_info = {
-            "table_size"   : f"{self.table_info_df}",
-            "column_metadata" : self.oracle_column_info_as_dict()
+            "table_size"      : f"{self.table_info_df}",
+            "num_rows"        : f"{self.num_rows}",
+            "column_metadata" : self.oracle_column_info_as_dict(),
         }
         pandas_info = {
             "metadata"   : self.pandas_column_info_as_dict()
@@ -195,26 +219,14 @@ class Monitor:
         }
         text = json.dumps(all_info, sort_keys=True, indent=4)
         with open(file_name, "w") as filew: filew.write(text)
-
-    def record_file(self, file_name):
-        import hashlib
-        self.num_parquet_files += 1
-        file_size = os.stat(file_name).st_size
-        file_base = os.path.basename(file_name)
-        with open(file_name, 'rb') as f: md5sum = hashlib.md5(f.read()).hexdigest()
-        self.file_dict[file_base] = {
-            "md5sum" : md5sum,
-            "size"   : file_size,
-            "nth"    : self.num_files
-        }
-
-    def record_df_info(self, df):
-        self.df_schema = df
-
-    def pandas_column_info_as_dict(self):
-        d = { l[0] : f"{l[1]}"  for l in zip(self.df_schema, self.df_schema.dtypes)}
-        return d
-        
+#
+# Utility methods
+#
+    def _now(self):
+        now =datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        return now 
+    
+"""
 def mk_md5(filename):
     "make md5 file correspoding to file named by filename"
 
@@ -223,6 +235,7 @@ def mk_md5(filename):
         hexvalue = value.hexdigest()
     with open(filename + ".md5","w") as filew:
         filew.write(f"{hexvalue}\n")
+"""
 
 def ora_connect(args):
     """ 
@@ -258,6 +271,7 @@ def mk_parquet(args):
     conn = ora_connect(args)
     cur = conn.cursor()
     monitor = Monitor(args, conn)
+    breakpoint()
     column_names = monitor.column_names
     max_rows  = monitor.fetch_max
     sql = f"select {','.join(column_names)} from {args.table}"
@@ -307,7 +321,6 @@ def mk_parquet2(args):
             file_name = os.path.join(output_dir, f"{args.table}-{args.key}-{file_number:04}.parquet")
             logging.info(f"beginning build of {file_name} ({max_rows} rows)")
             df.to_parquet(file_name, engine='pyarrow',compression='snappy')
-            mk_md5(file_name)
             file_size = os.stat(file_name).st_size
             logging.info(f"end of build of {file_name} {file_size:,d} bytes -- {(time.time()-t0):0.2f} seconds ")
             monitor.record_file(file_name)
