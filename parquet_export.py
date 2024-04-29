@@ -106,10 +106,10 @@ class Monitor:
         if len(self.table_info_df) != 1 : 
             logging.fatal("errror query for {args.table} did not return one row")
             exit(1)
-
         self.bytes_per_row = self.table_info_df["AVG_ROW_LEN"][0]
         self.mem_max = self.args.mem_max_bytes
         self.fetch_max = int(self.mem_max / self.bytes_per_row)
+
         if self.where : 
             sql =f"""
             SELECT
@@ -117,6 +117,7 @@ class Monitor:
             FROM
                {self.args.table}
                {self.where} """
+            logging.info(f"{sql}")
             temp_df =  psql.read_sql(sql, con=self.conn)
             self.num_rows = temp_df["NUM_ROW"][0]
         else:
@@ -233,7 +234,7 @@ class Monitor:
             "meta_info"   : meta_info,
             "file_info"   : file_info, 
             "oracle_info" : oracle_info,
-            "column_info" : self.merged_column_info()
+            "type_info" : self.merged_type_info()
         }
         
         
@@ -242,19 +243,19 @@ class Monitor:
         text = json.dumps(all_info, sort_keys=True, indent=4)
         with open(file_name, "w") as filew: filew.write(text)
 
-    def merged_column_info(self):
+    def merged_type_info(self):
         """ 
         build a dict for each column  with detailed info about types, etc
         for each stage of data handling (oracle, panads, parquet).
         """
-        column_info = {}
+        type_info = {}
         for key in self.oracle_column_info.keys():
-             column_info[key] = {
+             type_info[key] = {
                 "oracle" : self.oracle_column_info.get(key, "n/a"),
                 "pandas" : self.pandas_column_info.get(key, "n/a"),
                 "parquet" :self.parquet_column_info.get(key, "n/a")
                }
-        return column_info
+        return type_info
 #
 # Utility methods
 #
@@ -297,7 +298,6 @@ def mk_parquet(args):
     conn = ora_connect(args)
     cur = conn.cursor()
     monitor = Monitor(args, conn)
-    breakpoint()
     column_names = monitor.column_names
     max_rows  = monitor.fetch_max
     sql = f"select {','.join(column_names)} from {args.table}"
@@ -350,8 +350,7 @@ def mk_parquet2(args):
             file_size = os.stat(file_name).st_size
             logging.info(f"end of build of {file_name} {file_size:,d} bytes -- {(time.time()-t0):0.2f} seconds ")
             monitor.record_file(file_name)
-            #break
-    monitor.record_parquet_column_info(file_name) # 
+            monitor.record_parquet_column_info(file_name) # 
     logging.info(f"{args.table} processing finished")
     monitor.mk_final_report()
 
@@ -473,7 +472,7 @@ if __name__ == "__main__" :
     parser.add_argument("-db", "--database", choices=["sci", "oper"], 
                         help="sci or oper data bases", default="sci")
     parser.add_argument ("-n", "--noop", help = "tell me about the job w/out doing it",  action="store_true", default=False)
-    parser.add_argument("key", help = "a stngin naming what's included in the where clause, eg. healpix key")                     
+    parser.add_argument("key", help = "a stringn naming what's included in the where clause, eg. healpix key")                     
     parser.add_argument("where", help = "where clause, including the listeral WHERE ")
 
 
