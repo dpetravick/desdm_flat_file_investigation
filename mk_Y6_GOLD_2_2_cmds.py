@@ -31,6 +31,8 @@ for refinement in  range(high_order - low_order):
             index_map[key] = next_index_list
 #
 # Print the command lines 
+print('#!/usr/bin/bash')
+print('set -x')
 for key in  index_map.keys():
     coarse_partition_index = key 
     fine_partition_indexes = [str(i) for i in index_map[key]]
