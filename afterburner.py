@@ -1,8 +1,14 @@
+#!/usr/bin/env python3 
+
+print (1.0)
+
 import oracledb
 import json 
 import os 
 import glob
+import sys
 
+print (2.0, flush=True)
 
 def ora_connect():
     """ 
@@ -27,13 +33,18 @@ def ora_connect():
                                encoding="UTF-8")
     return conn
 
+print(3.0)
 print("about to conect")
 files = ["test.json"]
+print(4.0)
 conn = ora_connect()
+print (5.0)
 cur = conn.cursor()
+print (6.0)
+
 print ("connected") 
 files = glob.glob("d2_parquet/Y6_GOLD_2_2/Y6_GOLD_2_2*.json")
-
+print (7.0)
 for  f in files:
     print(f)
     j = json.load(open(f,"r"))
@@ -42,12 +53,14 @@ for  f in files:
         # prune junk
         #print("deleting type info")
         del j["type_info"]
+        print (10.0, flush=True)
         continue 
     else:
         # give the users some RA, DEC clue
         #pathup counting bug IF number_Files != 0.
         #breakpoint()
         # fix off by one
+        print(11.0, flush=True)
         fixed_num_files = int(j["file_info"]["number_files"]) -1 
         j["file_info"]["number_files"] = fixed_num_files
         # clarify name 
@@ -77,7 +90,7 @@ for  f in files:
 
         # add helpfil RA, DECs.
         sql = f'SELECT MIN(RA) minra, MAX(RA) maxra, MIN(DEC) mindec, MAX(DEC)  maxdec  from {j["meta_info"]["table"]} {j["meta_info"]["where_clause"]}'
-        print (sql)    
+        print (sql, flush=True)    
         cur.execute(sql)
         (minra, maxra, mindec, maxdec) = cur.fetchone()
         j["file_info"]["min_ra"]  = minra
