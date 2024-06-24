@@ -247,6 +247,7 @@ class Monitor:
         
     def record_parquet_column_info(self, path):
         import pyarrow.parquet as pq
+        breakpoint()
         # record types, column names.
         schema = pq.read_schema(path, memory_map=True)
         names = schema.names
